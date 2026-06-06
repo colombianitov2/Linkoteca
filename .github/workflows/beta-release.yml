@@ -53,6 +53,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npx cap sync android
+      - run: chmod +x gradlew
+        working-directory: android
       - run: ./gradlew assembleDebug
         working-directory: android
       - name: Normalize Android artifact
