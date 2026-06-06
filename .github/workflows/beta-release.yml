@@ -105,4 +105,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           prerelease: true
+          overwrite_files: true
           files: release/*

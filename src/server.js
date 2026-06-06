@@ -20,7 +20,8 @@ const defaultExcelPath = "C:\\Users\\erpec\\Desktop\\Links.xlsx";
 const port = Number(process.env.PORT || 4387);
 const appUrl = `http://localhost:${port}`;
 const appVersion = "0.3.0-beta.1";
-const releaseBaseUrl = "https://github.com/colombianitov2/linkoteca-beta/releases/latest/download";
+const releaseTag = "v0.3.0-beta.1";
+const releaseBaseUrl = `https://github.com/colombianitov2/linkoteca-beta/releases/download/${releaseTag}`;
 const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/linkoteca-beta/main/updates/latest.json";
 
 const blockedRoots = [
