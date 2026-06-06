@@ -1,0 +1,12 @@
+node_modules/
+data/*.json
+data/backups/
+data/thumbnails/
+dist/
+exports/
+logs/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.log
+.env

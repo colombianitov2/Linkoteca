@@ -1,0 +1,86 @@
+{
+  "name": "linkoteca",
+  "version": "0.3.0-beta.1",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "Biblioteca visual de enlaces con carpetas, vista previa y sincronizacion.",
+  "author": "Ernesto Pernett",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/colombianitov2/linkoteca-beta.git"
+  },
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-linkoteca.ps1",
+    "serve": "node src/server.js",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-linkoteca.ps1",
+    "import:excel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/import-excel.ps1",
+    "dev": "node src/server.js",
+    "desktop": "electron electron/main.cjs",
+    "check": "node --check src/server.js && node --check public/app.js && node --check electron/main.cjs",
+    "dist:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+    "dist:mac": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-mac.ps1",
+    "dist:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.3.4",
+    "express": "^5.1.0",
+    "lucide-static": "^1.16.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.wolframica.linkoteca",
+    "productName": "Linkoteca",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "public/**/*",
+      "scripts/**/*",
+      "!data/*.json",
+      "package.json",
+      "README.md"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

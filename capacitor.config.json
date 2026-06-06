@@ -1,0 +1,9 @@
+{
+  "appId": "com.wolframica.linkoteca",
+  "appName": "Linkoteca",
+  "webDir": "public",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "http"
+  }
+}

@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111111">
+    <title>Linkoteca</title>
+    <link rel="manifest" href="/manifest.webmanifest?v=16">
+    <link rel="stylesheet" href="/styles.css?v=16">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark"><span class="icon" style="--icon: url('/icons/library.svg')"></span></span>
+          <span>
+            <strong>Linkoteca</strong>
+            <small>Biblioteca visual</small>
+          </span>
+        </div>
+
+        <div class="sidebar-actions">
+          <button id="allLinksButton" class="sidebar-button active" type="button">
+            <span class="button-left"><span class="icon" style="--icon: url('/icons/library.svg')"></span>Todos</span>
+            <span id="allCount" class="count">0</span>
+          </button>
+          <button id="reviewLinksButton" class="sidebar-button" type="button">
+            <span class="button-left"><span class="icon" style="--icon: url('/icons/clock-3.svg')"></span>Por revisar</span>
+            <span id="reviewCount" class="count">0</span>
+          </button>
+          <button id="duplicatesButton" class="sidebar-button" type="button">
+            <span class="button-left"><span class="icon" style="--icon: url('/icons/copy.svg')"></span>Duplicados</span>
+            <span id="duplicatesCount" class="count">0</span>
+          </button>
+          <button id="trashButton" class="sidebar-button" type="button">
+            <span class="button-left"><span class="icon" style="--icon: url('/icons/x.svg')"></span>Papelera</span>
+            <span id="trashCount" class="count">0</span>
+          </button>
+        </div>
+
+        <div class="folder-heading">
+          <span>Carpetas</span>
+          <button id="newCategoryButton" class="icon-button" type="button" title="Nueva carpeta" aria-label="Nueva carpeta">
+            <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
+          </button>
+        </div>
+        <label class="folder-search-wrap">
+          <span class="icon" style="--icon: url('/icons/search.svg')"></span>
+          <input id="folderSearchInput" class="folder-search" type="search" placeholder="Filtrar carpetas" autocomplete="off">
+        </label>
+        <nav id="categoryList" class="category-list" aria-label="Carpetas"></nav>
+        <button id="toggleFoldersButton" class="toggle-folders-button" type="button" hidden>
+          <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
+          <span>Mostrar todas</span>
+        </button>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-block">
+            <span class="eyebrow"><span class="icon" style="--icon: url('/icons/sparkles.svg')"></span> Colección personal</span>
+            <h1 id="activeTitle">Todos</h1>
+            <p id="libraryStats">Cargando...</p>
+          </div>
+          <div class="toolbar">
+            <label class="search-wrap">
+              <span class="icon" style="--icon: url('/icons/search.svg')"></span>
+              <input id="searchInput" class="search" type="search" placeholder="Buscar enlaces, carpetas o plataformas" autocomplete="off">
+            </label>
+            <button id="enrichButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/refresh-cw.svg')"></span>
+              Actualizar vistas
+            </button>
+            <button id="autoClassifyButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/sparkles.svg')"></span>
+              Auto-clasificar
+            </button>
+            <button id="settingsButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/settings.svg')"></span>
+              Configuración
+            </button>
+          </div>
+        </header>
+
+        <section class="add-band" aria-label="Agregar enlace">
+          <div class="add-band-title">
+            <span class="icon" style="--icon: url('/icons/link.svg')"></span>
+            <span>Nuevo enlace</span>
+          </div>
+          <form id="addLinkForm" class="add-form">
+            <input id="linkUrlInput" type="url" required placeholder="Pega un enlace">
+            <input id="linkTitleInput" type="text" placeholder="Título opcional">
+            <select id="linkCategoryInput" aria-label="Carpeta"></select>
+            <button type="submit">
+              <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
+              Agregar
+            </button>
+          </form>
+        </section>
+
+        <section id="gallery" class="gallery" aria-live="polite"></section>
+        <div id="emptyState" class="empty-state" hidden>No hay enlaces en esta vista.</div>
+      </main>
+    </div>
+
+    <dialog id="moveDialog" class="dialog">
+      <form method="dialog" class="dialog-panel">
+        <h2>Mover enlace</h2>
+        <label>
+          Carpeta
+          <select id="moveCategorySelect"></select>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost-button" type="submit">
+            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+            Cancelar
+          </button>
+          <button id="confirmMoveButton" value="default" type="button">
+            <span class="icon" style="--icon: url('/icons/move-right.svg')"></span>
+            Mover
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="detailDialog" class="dialog detail-dialog">
+      <form method="dialog" class="dialog-panel detail-panel">
+        <div id="detailPreview" class="detail-preview"></div>
+        <div class="detail-content">
+          <div class="detail-header">
+            <h2>Detalle del enlace</h2>
+            <button value="cancel" class="icon-button ghost-button" type="submit" aria-label="Cerrar">
+              <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+            </button>
+          </div>
+          <label>
+            Título
+            <input id="detailTitleInput" type="text" maxlength="180" autocomplete="off">
+          </label>
+          <label>
+            Descripción
+            <textarea id="detailDescriptionInput" maxlength="1200" rows="5"></textarea>
+          </label>
+          <label>
+            Carpeta
+            <select id="detailCategorySelect"></select>
+          </label>
+          <label>
+            Enlace
+            <input id="detailUrlInput" type="url" readonly>
+          </label>
+          <div class="dialog-actions detail-actions">
+            <button id="detailOpenButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/arrow-up-right.svg')"></span>
+              Abrir
+            </button>
+            <button id="detailCopyButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/copy.svg')"></span>
+              Copiar
+            </button>
+            <button id="detailSaveButton" type="button">
+              <span class="icon" style="--icon: url('/icons/check.svg')"></span>
+              Guardar
+            </button>
+            <button id="detailArchiveButton" class="danger-button" type="button">
+              <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+              Archivar
+            </button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="categoryDialog" class="dialog">
+      <form method="dialog" class="dialog-panel">
+        <h2>Nueva carpeta</h2>
+        <label>
+          Nombre
+          <input id="categoryNameInput" type="text" maxlength="120" autocomplete="off">
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost-button" type="submit">
+            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+            Cancelar
+          </button>
+          <button id="confirmCategoryButton" type="button">
+            <span class="icon" style="--icon: url('/icons/folder.svg')"></span>
+            Crear
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog" class="dialog settings-dialog">
+      <form method="dialog" class="dialog-panel settings-panel">
+        <div class="settings-header">
+          <div>
+            <span class="eyebrow"><span class="icon" style="--icon: url('/icons/settings.svg')"></span> Centro de control</span>
+            <h2>Configuración</h2>
+          </div>
+          <button value="cancel" class="icon-button ghost-button" type="submit" aria-label="Cerrar">
+            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+          </button>
+        </div>
+
+        <section class="settings-section">
+          <h3>Créditos</h3>
+          <div class="credit-grid">
+            <div>
+              <strong>Propietario</strong>
+              <span>Ernesto Pernett - Ingeniero Mecánico</span>
+            </div>
+            <div>
+              <strong>Asistencia técnica</strong>
+              <span>Codex de OpenAI - desarrollo, diseño y automatización asistida</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Reporte y sugerencias</h3>
+          <label>
+            Email de destino
+            <input id="supportEmailInput" type="email" placeholder="Pendiente de confirmar">
+          </label>
+          <div class="dialog-actions inline-actions">
+            <button id="reportErrorButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/external-link.svg')"></span>
+              Reportar error
+            </button>
+            <button id="suggestionButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/sparkles.svg')"></span>
+              Sugerencia
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Donaciones</h3>
+          <label>
+            Link de PayPal
+            <input id="paypalUrlInput" type="url" placeholder="Pendiente de confirmar">
+          </label>
+          <div class="dialog-actions inline-actions">
+            <button id="donateButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/external-link.svg')"></span>
+              Abrir donaciones
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Actualizaciones y descargas</h3>
+          <div class="split-fields">
+            <label>
+              URL para verificar versión
+              <input id="latestVersionUrlInput" type="url" placeholder="Opcional">
+            </label>
+            <label>
+              Versión instalada
+              <input id="installedVersionInput" type="text" readonly>
+            </label>
+          </div>
+          <div class="split-fields three">
+            <label>
+              Android
+              <input id="androidUrlInput" type="url" placeholder="Link APK / Play Store">
+            </label>
+            <label>
+              iOS
+              <input id="iosUrlInput" type="url" placeholder="Link App Store / PWA">
+            </label>
+            <label>
+              PC
+              <input id="pcUrlInput" type="url" placeholder="Instalador Windows">
+            </label>
+          </div>
+          <div class="dialog-actions inline-actions">
+            <button id="checkVersionButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/refresh-cw.svg')"></span>
+              Verificar versión
+            </button>
+            <button id="installAppButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/smartphone.svg')"></span>
+              Instalar app
+            </button>
+          </div>
+          <div class="platform-downloads-grid">
+            <button id="downloadPcButton" class="ghost-button platform-download-btn" type="button">
+              <span class="icon" style="--icon: url('/icons/windows.svg')"></span>
+              <span>Windows</span>
+            </button>
+            <button id="downloadAndroidButton" class="ghost-button platform-download-btn" type="button">
+              <span class="icon" style="--icon: url('/icons/android.svg')"></span>
+              <span>Android</span>
+            </button>
+            <button id="downloadIosButton" class="ghost-button platform-download-btn" type="button">
+              <span class="icon" style="--icon: url('/icons/apple.svg')"></span>
+              <span>iOS</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Almacenamiento y exportación</h3>
+          <label>
+            Carpeta local de almacenamiento
+            <input id="storagePathInput" type="text" placeholder="C:\Users\...\Documents\Linkoteca\exports">
+          </label>
+          <div class="split-fields">
+            <label>
+              Formato principal
+              <select id="storageFormatInput">
+                <option value="json">JSON recomendado</option>
+                <option value="xls">Excel compatible</option>
+                <option value="csv">CSV para Excel</option>
+                <option value="txt">TXT simple</option>
+              </select>
+            </label>
+            <label>
+              Descarga rápida
+              <select id="downloadFormatInput">
+                <option value="json">JSON</option>
+                <option value="xls">Excel compatible</option>
+                <option value="csv">CSV / Excel</option>
+                <option value="txt">TXT</option>
+              </select>
+            </label>
+          </div>
+          <div class="dialog-actions inline-actions">
+            <button id="chooseStorageFolderButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/folder-open.svg')"></span>
+              Elegir carpeta
+            </button>
+            <button id="downloadDataButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
+              Descargar archivo
+            </button>
+            <button id="exportLocalButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/upload-cloud.svg')"></span>
+              Guardar en carpeta
+            </button>
+            <button id="exportGalleryButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/library.svg')"></span>
+              Galería por carpetas
+            </button>
+            <button id="exportDesktopButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/folder-open.svg')"></span>
+              Galería en Escritorio
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Nube y sincronización</h3>
+          <label>
+            Proveedor
+            <select id="syncModeInput">
+              <option value="none">Sin sincronización</option>
+              <option value="webdav">Nextcloud WebDAV</option>
+              <option value="ip">IP / servidor propio</option>
+              <option value="localFolder">Carpeta local</option>
+              <option value="googleDrive">Google Drive con cuenta</option>
+              <option value="oneDrive">OneDrive sincronizado</option>
+            </select>
+          </label>
+          <label>
+            URL IP / servidor propio
+            <input id="remoteUrlInput" type="url" placeholder="http://192.168.1.50:8080/linkoteca.json">
+          </label>
+          <label>
+            URL Nextcloud WebDAV
+            <input id="webdavUrlInput" type="url" placeholder="https://cloud.example.com/remote.php/dav/files/usuario/linkoteca.json">
+          </label>
+          <label>
+            Carpeta sincronizada local / OneDrive
+            <input id="syncFolderPathInput" type="text" placeholder="C:\Users\...\OneDrive\Linkoteca">
+          </label>
+          <div class="split-fields">
+            <label>
+              Google Client ID
+              <input id="googleClientIdInput" type="text" autocomplete="off" placeholder="OAuth Client ID">
+            </label>
+            <label>
+              Google Client Secret
+              <input id="googleClientSecretInput" type="password" autocomplete="off" placeholder="OAuth Client Secret">
+            </label>
+          </div>
+          <p id="googleStatusText" class="settings-note">Google Drive sin conectar</p>
+          <label class="checkbox-row">
+            <input id="autoSyncInput" type="checkbox">
+            <span>Sincronizar automáticamente al abrir la app</span>
+          </label>
+          <div class="split-fields">
+            <label>
+              Usuario
+              <input id="syncUserInput" type="text" autocomplete="username">
+            </label>
+            <label>
+              Clave
+              <input id="syncPasswordInput" type="password" autocomplete="current-password">
+            </label>
+          </div>
+          <div class="dialog-actions inline-actions">
+            <button id="chooseSyncFolderButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/folder-open.svg')"></span>
+              Elegir carpeta nube
+            </button>
+            <button id="connectGoogleButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/cloud.svg')"></span>
+              Conectar Google
+            </button>
+            <button id="pullSyncButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
+              Descargar nube
+            </button>
+            <button id="pushSyncButton" class="ghost-button" type="button">
+              <span class="icon" style="--icon: url('/icons/upload-cloud.svg')"></span>
+              Subir nube
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Instrucciones rápidas</h3>
+          <ol class="instructions-list">
+            <li>Pega un enlace, elige carpeta y pulsa Agregar.</li>
+            <li>Usa Actualizar vistas para buscar miniaturas y descripciones.</li>
+            <li>Haz clic en una tarjeta o en Editar para corregir título, descripción o carpeta.</li>
+            <li>Usa Copiar para compartir el enlace original.</li>
+            <li>En Android, usa Compartir desde otra app y elige Linkoteca para guardar el enlace en Por revisar.</li>
+            <li>Configura Google Drive, Nextcloud o una carpeta local para sincronizar el banco de enlaces.</li>
+          </ol>
+        </section>
+
+        <div class="dialog-actions settings-savebar">
+          <button id="saveSettingsButton" type="button">
+            <span class="icon" style="--icon: url('/icons/check.svg')"></span>
+            Guardar configuración
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="connectionDialog" class="dialog connection-dialog">
+      <form method="dialog" class="dialog-panel">
+        <h2>Conectar Linkoteca</h2>
+        <p class="dialog-copy">Para usar la app desde celular, abre Linkoteca en el PC y escribe la IP del servidor local.</p>
+        <label>
+          Servidor
+          <input id="apiBaseInput" type="url" placeholder="http://192.168.1.50:4387">
+        </label>
+        <div class="dialog-actions">
+          <button id="useLocalApiButton" class="ghost-button" type="button">
+            <span class="icon" style="--icon: url('/icons/library.svg')"></span>
+            Usar este equipo
+          </button>
+          <button id="saveApiBaseButton" type="button">
+            <span class="icon" style="--icon: url('/icons/check.svg')"></span>
+            Conectar
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="/app.js?v=16" type="module"></script>
+  </body>
+</html>

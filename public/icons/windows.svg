@@ -1,0 +1,14 @@
+<svg
+  class="lucide lucide-windows"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M4 11V6l7-1v6zm8-7.2 8-1.3V11h-8zM4 13h7v6l-7-1zm8 0h8v8.5l-8-1.3z" />
+</svg>
