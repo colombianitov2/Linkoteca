@@ -1,4 +1,4 @@
-# Linkoteca
+# Linkoteca [PRE RELEASE]
 
 App real de escritorio y movil para organizar enlaces como una galeria visual por carpetas.
 
