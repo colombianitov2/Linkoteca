@@ -9,17 +9,19 @@ const state = {
   lastSharedAt: 0,
   movingLinkId: null,
   detailLinkId: null,
-  installPrompt: null,
+  detailDirty: false,
+  detailSaveTimer: 0,
+  selectedLinkIds: new Set(),
+  confirmResolver: null,
   apiBase: localStorage.getItem("linkotecaApiBase") || ""
 };
 
 const PENDING_SHARES_KEY = "linkotecaPendingShares";
+const GITHUB_PROFILE_URL = "https://github.com/colombianitov2";
 
 const els = {
   allLinksButton: document.querySelector("#allLinksButton"),
   allCount: document.querySelector("#allCount"),
-  reviewLinksButton: document.querySelector("#reviewLinksButton"),
-  reviewCount: document.querySelector("#reviewCount"),
   duplicatesButton: document.querySelector("#duplicatesButton"),
   duplicatesCount: document.querySelector("#duplicatesCount"),
   trashButton: document.querySelector("#trashButton"),
@@ -34,7 +36,11 @@ const els = {
   linkUrlInput: document.querySelector("#linkUrlInput"),
   linkTitleInput: document.querySelector("#linkTitleInput"),
   linkCategoryInput: document.querySelector("#linkCategoryInput"),
-  enrichButton: document.querySelector("#enrichButton"),
+  bulkActions: document.querySelector("#bulkActions"),
+  bulkSelectionText: document.querySelector("#bulkSelectionText"),
+  bulkDeleteButton: document.querySelector("#bulkDeleteButton"),
+  bulkRestoreButton: document.querySelector("#bulkRestoreButton"),
+  clearSelectionButton: document.querySelector("#clearSelectionButton"),
   moveDialog: document.querySelector("#moveDialog"),
   moveCategorySelect: document.querySelector("#moveCategorySelect"),
   confirmMoveButton: document.querySelector("#confirmMoveButton"),
@@ -46,52 +52,33 @@ const els = {
   detailUrlInput: document.querySelector("#detailUrlInput"),
   detailOpenButton: document.querySelector("#detailOpenButton"),
   detailCopyButton: document.querySelector("#detailCopyButton"),
-  detailSaveButton: document.querySelector("#detailSaveButton"),
-  detailArchiveButton: document.querySelector("#detailArchiveButton"),
+  detailDeleteButton: document.querySelector("#detailDeleteButton"),
   newCategoryButton: document.querySelector("#newCategoryButton"),
   categoryDialog: document.querySelector("#categoryDialog"),
   categoryNameInput: document.querySelector("#categoryNameInput"),
   confirmCategoryButton: document.querySelector("#confirmCategoryButton"),
+  confirmDialog: document.querySelector("#confirmDialog"),
+  confirmMessage: document.querySelector("#confirmMessage"),
+  confirmNoButton: document.querySelector("#confirmNoButton"),
+  confirmYesButton: document.querySelector("#confirmYesButton"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   folderSearchInput: document.querySelector("#folderSearchInput"),
   toggleFoldersButton: document.querySelector("#toggleFoldersButton"),
-  autoClassifyButton: document.querySelector("#autoClassifyButton"),
   exportDesktopButton: document.querySelector("#exportDesktopButton"),
-  supportEmailInput: document.querySelector("#supportEmailInput"),
-  paypalUrlInput: document.querySelector("#paypalUrlInput"),
-  reportErrorButton: document.querySelector("#reportErrorButton"),
-  suggestionButton: document.querySelector("#suggestionButton"),
-  donateButton: document.querySelector("#donateButton"),
-  latestVersionUrlInput: document.querySelector("#latestVersionUrlInput"),
   installedVersionInput: document.querySelector("#installedVersionInput"),
-  androidUrlInput: document.querySelector("#androidUrlInput"),
-  iosUrlInput: document.querySelector("#iosUrlInput"),
-  pcUrlInput: document.querySelector("#pcUrlInput"),
+  githubProfileButton: document.querySelector("#githubProfileButton"),
   checkVersionButton: document.querySelector("#checkVersionButton"),
-  installAppButton: document.querySelector("#installAppButton"),
-  downloadAndroidButton: document.querySelector("#downloadAndroidButton"),
-  downloadIosButton: document.querySelector("#downloadIosButton"),
-  downloadPcButton: document.querySelector("#downloadPcButton"),
   storagePathInput: document.querySelector("#storagePathInput"),
   storageFormatInput: document.querySelector("#storageFormatInput"),
-  downloadFormatInput: document.querySelector("#downloadFormatInput"),
   chooseStorageFolderButton: document.querySelector("#chooseStorageFolderButton"),
   downloadDataButton: document.querySelector("#downloadDataButton"),
   exportLocalButton: document.querySelector("#exportLocalButton"),
-  exportGalleryButton: document.querySelector("#exportGalleryButton"),
   syncModeInput: document.querySelector("#syncModeInput"),
   remoteUrlInput: document.querySelector("#remoteUrlInput"),
   webdavUrlInput: document.querySelector("#webdavUrlInput"),
-  syncFolderPathInput: document.querySelector("#syncFolderPathInput"),
   autoSyncInput: document.querySelector("#autoSyncInput"),
-  chooseSyncFolderButton: document.querySelector("#chooseSyncFolderButton"),
-  syncUserInput: document.querySelector("#syncUserInput"),
-  syncPasswordInput: document.querySelector("#syncPasswordInput"),
-  googleClientIdInput: document.querySelector("#googleClientIdInput"),
-  googleClientSecretInput: document.querySelector("#googleClientSecretInput"),
-  googleStatusText: document.querySelector("#googleStatusText"),
-  connectGoogleButton: document.querySelector("#connectGoogleButton"),
+  trashRetentionDaysInput: document.querySelector("#trashRetentionDaysInput"),
   saveSettingsButton: document.querySelector("#saveSettingsButton"),
   pullSyncButton: document.querySelector("#pullSyncButton"),
   pushSyncButton: document.querySelector("#pushSyncButton"),
@@ -134,6 +121,39 @@ function getYouTubeId(url) {
     return null;
   }
   return null;
+}
+
+function instagramEmbedUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.replace(/^www\./, "").toLowerCase().includes("instagram.com")) return "";
+    const [type, shortcode] = parsed.pathname.split("/").filter(Boolean);
+    if (!["p", "reel", "tv"].includes(type) || !shortcode) return "";
+    return `https://www.instagram.com/${type}/${shortcode}/embed/`;
+  } catch {
+    return "";
+  }
+}
+
+function facebookVideoEmbedUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    const isFacebook = host.includes("facebook.com") || host.includes("fb.watch");
+    const isVideoPath = /\/(videos|watch|reel|reels)\b/i.test(parsed.pathname) || host.includes("fb.watch");
+    if (!isFacebook || !isVideoPath) return "";
+    return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=560`;
+  } catch {
+    return "";
+  }
+}
+
+function socialVideoEmbedUrl(url) {
+  return instagramEmbedUrl(url) || facebookVideoEmbedUrl(url);
+}
+
+function isVideoPreviewLink(link) {
+  return Boolean(getYouTubeId(link.url) || socialVideoEmbedUrl(link.url));
 }
 
 function apiUrl(path) {
@@ -274,15 +294,15 @@ async function saveSharedLink(payload) {
       title,
       description,
       thumbnail,
-      categoryName: "Por revisar",
+      categoryName: "General",
       tags: ["compartido"]
     })
   });
 
   state.db.links.unshift(data.link);
-  state.activeCategoryId = "review";
+  state.activeCategoryId = "all";
   render();
-  toast("Enlace compartido guardado en Por revisar");
+  toast("Enlace compartido guardado");
 }
 
 async function processQueuedSharedLinks() {
@@ -344,6 +364,41 @@ function toast(message) {
   toast.timer = setTimeout(() => els.toast.classList.remove("show"), 2200);
 }
 
+function updateLocalLink(updatedLink) {
+  const index = state.db.links.findIndex((link) => link.id === updatedLink.id);
+  if (index >= 0) state.db.links[index] = updatedLink;
+}
+
+function clearSelection() {
+  state.selectedLinkIds.clear();
+}
+
+function pruneSelectionToExistingLinks() {
+  const existingIds = new Set(state.db.links.map((link) => link.id));
+  for (const id of [...state.selectedLinkIds]) {
+    if (!existingIds.has(id)) state.selectedLinkIds.delete(id);
+  }
+}
+
+function selectedLinks() {
+  return state.db.links.filter((link) => state.selectedLinkIds.has(link.id));
+}
+
+function confirmAction(message) {
+  return new Promise((resolve) => {
+    state.confirmResolver = resolve;
+    els.confirmMessage.textContent = message;
+    els.confirmDialog.showModal();
+  });
+}
+
+function resolveConfirm(value) {
+  const resolver = state.confirmResolver;
+  state.confirmResolver = null;
+  if (els.confirmDialog.open) els.confirmDialog.close();
+  if (resolver) resolver(value);
+}
+
 function filteredLinks() {
   const term = state.search.trim().toLowerCase();
   const duplicateUrls = state.activeCategoryId === "duplicates" ? duplicateUrlSet() : null;
@@ -353,7 +408,6 @@ function filteredLinks() {
       (state.activeCategoryId === "trash" && archived) ||
       (!archived && (
         state.activeCategoryId === "all" ||
-        (state.activeCategoryId === "review" && link.status !== "confirmado") ||
         (state.activeCategoryId === "duplicates" && duplicateUrls.has(normalizedUrl(link.url))) ||
         link.categoryId === state.activeCategoryId
       ));
@@ -385,12 +439,10 @@ function renderCategoryOptions() {
 function renderCategories() {
   const counts = countByCategory();
   const activeLinks = state.db.links.filter((link) => !link.archived);
-  const reviewCount = activeLinks.filter((link) => link.status !== "confirmado" && link.status !== "auto-clasificado").length;
   const duplicatesSet = duplicateUrlSet();
   const duplicatesCount = activeLinks.filter((link) => duplicatesSet.has(normalizedUrl(link.url))).length;
   const trashCount = state.db.links.filter((link) => link.archived).length;
   els.allCount.textContent = activeLinks.length;
-  els.reviewCount.textContent = reviewCount;
   els.duplicatesCount.textContent = duplicatesCount;
   els.trashCount.textContent = trashCount;
   els.categoryList.innerHTML = "";
@@ -400,6 +452,8 @@ function renderCategories() {
   let visibleCount = 0;
 
   for (const category of categories) {
+    const row = document.createElement("div");
+    row.className = "category-row";
     const button = document.createElement("button");
     button.type = "button";
     button.className = `category-button${state.activeCategoryId === category.id ? " active" : ""}`;
@@ -413,18 +467,30 @@ function renderCategories() {
       <span class="count">${counts.get(category.id) || 0}</span>
     `;
     if (folderFilter && !category.name.toLowerCase().includes(folderFilter)) {
-      button.classList.add("hidden-folder");
+      row.classList.add("hidden-folder");
     } else {
       visibleCount += 1;
       if (!folderFilter && !state.foldersExpanded && visibleCount > maxVisible && state.activeCategoryId !== category.id) {
-        button.classList.add("hidden-folder");
+        row.classList.add("hidden-folder");
       }
     }
     button.addEventListener("click", () => {
+      clearSelection();
       state.activeCategoryId = category.id;
       render();
     });
-    els.categoryList.append(button);
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "category-delete-button";
+    deleteButton.title = `Eliminar carpeta ${category.name}`;
+    deleteButton.setAttribute("aria-label", `Eliminar carpeta ${category.name}`);
+    deleteButton.innerHTML = icon("trash");
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteCategory(category.id).catch((error) => toast(error.message));
+    });
+    row.append(button, deleteButton);
+    els.categoryList.append(row);
   }
   if (categories.length > maxVisible && !folderFilter) {
     els.toggleFoldersButton.hidden = false;
@@ -435,7 +501,6 @@ function renderCategories() {
     els.toggleFoldersButton.hidden = true;
   }
   els.allLinksButton.classList.toggle("active", state.activeCategoryId === "all");
-  els.reviewLinksButton.classList.toggle("active", state.activeCategoryId === "review");
   els.duplicatesButton.classList.toggle("active", state.activeCategoryId === "duplicates");
   els.trashButton.classList.toggle("active", state.activeCategoryId === "trash");
 }
@@ -444,9 +509,7 @@ function renderHeader(links) {
   const activeCategory = state.db.categories.find((category) => category.id === state.activeCategoryId);
   const title = state.activeCategoryId === "all"
     ? "Todos"
-    : state.activeCategoryId === "review"
-      ? "Por revisar"
-      : state.activeCategoryId === "duplicates"
+    : state.activeCategoryId === "duplicates"
         ? "Duplicados"
         : state.activeCategoryId === "trash"
           ? "Papelera"
@@ -457,9 +520,21 @@ function renderHeader(links) {
   els.libraryStats.textContent = `${links.length} visibles · ${total} enlaces · ${folders} carpetas`;
 }
 
+function renderBulkActions() {
+  pruneSelectionToExistingLinks();
+  const selected = selectedLinks();
+  els.bulkActions.hidden = selected.length === 0;
+  if (selected.length === 0) return;
+  els.bulkSelectionText.textContent = `${selected.length} seleccionado${selected.length === 1 ? "" : "s"}`;
+  const isTrashView = state.activeCategoryId === "trash";
+  els.bulkDeleteButton.hidden = isTrashView;
+  els.bulkRestoreButton.hidden = !isTrashView;
+}
+
 function renderGallery() {
   const links = filteredLinks();
   renderHeader(links);
+  renderBulkActions();
   els.gallery.innerHTML = "";
   els.emptyState.hidden = links.length > 0;
 
@@ -467,8 +542,13 @@ function renderGallery() {
     const article = document.createElement("article");
     article.className = "link-card";
     article.innerHTML = `
+      <label class="card-select" title="Seleccionar enlace">
+        <input type="checkbox" data-action="select" ${state.selectedLinkIds.has(link.id) ? "checked" : ""}>
+        <span></span>
+      </label>
       <div class="thumb">
         ${link.thumbnail ? `<img src="${escapeAttr(link.thumbnail)}" alt="">` : `<div class="placeholder">${escapeHtml(platformInitial(link.platform))}</div>`}
+        ${isVideoPreviewLink(link) ? `<span class="play-badge">${icon("play")}</span>` : ""}
         <span class="platform">${escapeHtml(link.platform || "Web")}</span>
       </div>
       <div class="card-body">
@@ -477,8 +557,7 @@ function renderGallery() {
         <div class="card-meta">
           <span class="pill">${icon("folder", `--icon-bg: ${getFolderGradient(categoryName(link.categoryId))};`)}<span>${escapeHtml(categoryName(link.categoryId))}</span></span>
           <span class="pill">${icon("globe")}<span>${escapeHtml(hostFromUrl(link.url))}</span></span>
-          ${link.status === "auto-clasificado" ? `<span class="pill auto-badge">${icon("sparkles")}<span>Auto</span></span>` : ""}
-          ${link.status !== "confirmado" && link.status !== "auto-clasificado" ? `<span class="pill status">${icon("clock-3")}<span>${escapeHtml(link.status)}</span></span>` : ""}
+          ${link.status !== "confirmado" ? `<span class="pill status">${icon("clock-3")}<span>${escapeHtml(link.status)}</span></span>` : ""}
         </div>
       </div>
       <div class="card-actions">
@@ -487,11 +566,20 @@ function renderGallery() {
         <button type="button" data-action="detail" title="Editar enlace">${icon("settings")}Editar</button>
         ${link.archived
           ? `<button type="button" data-action="restore" title="Restaurar enlace">${icon("check")}Restaurar</button>`
-          : `<button type="button" data-action="move" title="Mover de carpeta">${icon("move-right")}Mover</button>`}
+          : `
+            <button type="button" data-action="move" title="Mover de carpeta">${icon("move-right")}Mover</button>
+            <button type="button" data-action="delete" title="Eliminar enlace">${icon("trash")}Eliminar</button>
+          `}
       </div>
     `;
     article.addEventListener("click", (event) => {
-      if (!event.target.closest("button")) openDetailDialog(link.id);
+      if (!event.target.closest("button, input, label")) openDetailDialog(link.id);
+    });
+    article.querySelector('[data-action="select"]').addEventListener("change", (event) => {
+      event.stopPropagation();
+      if (event.target.checked) state.selectedLinkIds.add(link.id);
+      else state.selectedLinkIds.delete(link.id);
+      renderBulkActions();
     });
     article.querySelector('[data-action="open"]').addEventListener("click", (event) => {
       event.stopPropagation();
@@ -510,6 +598,13 @@ function renderGallery() {
       moveAction.addEventListener("click", (event) => {
         event.stopPropagation();
         openMoveDialog(link.id);
+      });
+    }
+    const deleteAction = article.querySelector('[data-action="delete"]');
+    if (deleteAction) {
+      deleteAction.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteLink(link.id).catch((error) => toast(error.message));
       });
     }
     const restoreAction = article.querySelector('[data-action="restore"]');
@@ -556,28 +651,38 @@ function openDetailDialog(linkId) {
   const link = state.db.links.find((item) => item.id === linkId);
   if (!link) return;
   state.detailLinkId = linkId;
+  state.detailDirty = false;
+  clearTimeout(state.detailSaveTimer);
   els.detailTitleInput.value = link.title || "";
   els.detailDescriptionInput.value = link.description || "";
   els.detailCategorySelect.value = link.categoryId;
   els.detailUrlInput.value = link.url;
   const youtubeId = getYouTubeId(link.url);
+  const socialEmbedUrl = socialVideoEmbedUrl(link.url);
   els.detailPreview.innerHTML = youtubeId
     ? `
       <div class="video-container">
         <iframe src="https://www.youtube.com/embed/${escapeAttr(youtubeId)}" title="${escapeAttr(link.title || "Video")}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
       </div>
     `
+    : socialEmbedUrl
+      ? `
+        <div class="video-container social-video-container">
+          <iframe src="${escapeAttr(socialEmbedUrl)}" title="${escapeAttr(link.title || "Vista previa")}" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        </div>
+      `
     : `
       <div class="thumb detail-thumb">
         ${link.thumbnail ? `<img src="${escapeAttr(link.thumbnail)}" alt="">` : `<div class="placeholder">${escapeHtml(platformInitial(link.platform))}</div>`}
+        ${isVideoPreviewLink(link) ? `<span class="play-badge">${icon("play")}</span>` : ""}
         <span class="platform">${escapeHtml(link.platform || "Web")}</span>
       </div>
     `;
-  els.detailArchiveButton.innerHTML = link.archived
+  els.detailDeleteButton.innerHTML = link.archived
     ? `${icon("check")} Restaurar`
-    : `${icon("x")} Archivar`;
-  els.detailArchiveButton.classList.toggle("danger-button", !link.archived);
-  els.detailArchiveButton.classList.toggle("restore-button", Boolean(link.archived));
+    : `${icon("trash")} Eliminar`;
+  els.detailDeleteButton.classList.toggle("danger-button", !link.archived);
+  els.detailDeleteButton.classList.toggle("restore-button", Boolean(link.archived));
   els.detailDialog.showModal();
 }
 
@@ -596,7 +701,16 @@ async function moveCurrentLink() {
   toast("Enlace movido");
 }
 
-async function saveDetail() {
+function scheduleDetailAutosave() {
+  if (!state.detailLinkId) return;
+  state.detailDirty = true;
+  clearTimeout(state.detailSaveTimer);
+  state.detailSaveTimer = setTimeout(() => {
+    saveDetail({ silent: true }).catch((error) => toast(error.message));
+  }, 650);
+}
+
+async function saveDetail(options = {}) {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (!link) return;
   const data = await api(`/api/links/${link.id}`, {
@@ -607,43 +721,97 @@ async function saveDetail() {
       categoryId: els.detailCategorySelect.value
     })
   });
-  const index = state.db.links.findIndex((item) => item.id === data.link.id);
-  if (index >= 0) state.db.links[index] = data.link;
-  els.detailDialog.close();
-  state.detailLinkId = null;
+  updateLocalLink(data.link);
+  state.detailDirty = false;
   render();
-  toast("Enlace guardado");
+  if (options.close) {
+    els.detailDialog.close();
+    state.detailLinkId = null;
+  }
+  if (!options.silent) toast("Cambios guardados");
 }
 
-async function archiveCurrentDetailLink() {
+async function deleteCurrentDetailLink() {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (!link) return;
   if (link.archived) {
     await restoreLink(link.id, { closeDetail: true });
     return;
   }
-  const data = await api(`/api/links/${link.id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ archived: true })
-  });
-  const index = state.db.links.findIndex((item) => item.id === data.link.id);
-  if (index >= 0) state.db.links[index] = data.link;
-  els.detailDialog.close();
-  state.detailLinkId = null;
+  state.detailDirty = false;
+  await deleteLink(link.id, { closeDetail: true });
+}
+
+async function deleteLink(linkId, options = {}) {
+  const data = await api(`/api/links/${linkId}`, { method: "DELETE" });
+  updateLocalLink(data.link);
+  state.selectedLinkIds.delete(linkId);
+  if (options.closeDetail) {
+    state.detailDirty = false;
+    clearTimeout(state.detailSaveTimer);
+    state.detailLinkId = null;
+    if (els.detailDialog.open) els.detailDialog.close();
+  }
   render();
   toast("Enlace enviado a Papelera");
 }
 
+async function bulkDeleteSelected() {
+  const ids = selectedLinks().filter((link) => !link.archived).map((link) => link.id);
+  if (ids.length === 0) return;
+  const confirmed = await confirmAction(`¿Está seguro que desea eliminar ${ids.length} enlace${ids.length === 1 ? "" : "s"} seleccionado${ids.length === 1 ? "" : "s"}?`);
+  if (!confirmed) return;
+  const data = await api("/api/links/bulk/delete", {
+    method: "POST",
+    body: JSON.stringify({ ids })
+  });
+  for (const link of data.links) updateLocalLink(link);
+  clearSelection();
+  render();
+  toast(`${data.links.length} enlace${data.links.length === 1 ? "" : "s"} enviado${data.links.length === 1 ? "" : "s"} a Papelera`);
+}
+
+async function bulkRestoreSelected() {
+  const ids = selectedLinks().filter((link) => link.archived).map((link) => link.id);
+  if (ids.length === 0) return;
+  const data = await api("/api/links/bulk/restore", {
+    method: "POST",
+    body: JSON.stringify({ ids })
+  });
+  for (const link of data.links) updateLocalLink(link);
+  clearSelection();
+  state.activeCategoryId = "all";
+  render();
+  toast(`${data.links.length} enlace${data.links.length === 1 ? "" : "s"} restaurado${data.links.length === 1 ? "" : "s"}`);
+}
+
+async function deleteCategory(categoryId) {
+  const category = state.db.categories.find((item) => item.id === categoryId);
+  if (!category) return;
+  const confirmed = await confirmAction("¿Está seguro que desea borrar esta carpeta?");
+  if (!confirmed) return;
+  const data = await api(`/api/categories/${categoryId}`, { method: "DELETE" });
+  state.db.categories = state.db.categories.filter((item) => item.id !== categoryId);
+  for (const link of data.links || []) updateLocalLink(link);
+  if (state.activeCategoryId === categoryId) state.activeCategoryId = "all";
+  clearSelection();
+  render();
+  toast(`Carpeta eliminada. ${data.links?.length || 0} enlaces a Papelera`);
+}
+
 async function restoreLink(linkId, options = {}) {
   const data = await api(`/api/links/${linkId}/restore`, { method: "POST" });
-  const index = state.db.links.findIndex((item) => item.id === data.link.id);
-  if (index >= 0) state.db.links[index] = data.link;
+  updateLocalLink(data.link);
+  state.selectedLinkIds.delete(linkId);
+  state.activeCategoryId = "all";
   if (options.closeDetail) {
-    els.detailDialog.close();
+    state.detailDirty = false;
+    clearTimeout(state.detailSaveTimer);
     state.detailLinkId = null;
+    if (els.detailDialog.open) els.detailDialog.close();
   }
   render();
-  toast("Enlace restaurado");
+  toast("Enlace restaurado en Todos");
 }
 
 function openDetailLink() {
@@ -654,14 +822,6 @@ function openDetailLink() {
 function copyDetailUrl() {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (link) copyLink(link.url);
-}
-
-function openExternal(url, missingMessage) {
-  if (!url) {
-    toast(missingMessage);
-    return;
-  }
-  window.open(url, "_blank", "noopener");
 }
 
 function openConnectionDialog(error) {
@@ -691,27 +851,6 @@ async function useLocalApi() {
   els.connectionDialog.close();
   await load();
   toast("Usando servidor local");
-}
-
-function openMail(kind) {
-  const email = els.supportEmailInput.value.trim();
-  if (!email) {
-    toast("Confirma primero el email de destino");
-    return;
-  }
-  const subject = kind === "error" ? "Reporte de error - Linkoteca" : "Sugerencia - Linkoteca";
-  const body = [
-    "Hola Ernesto,",
-    "",
-    kind === "error" ? "Quiero reportar este error:" : "Tengo esta sugerencia:",
-    "",
-    "",
-    "Información útil:",
-    `Versión: ${els.installedVersionInput.value || "sin verificar"}`,
-    `Enlaces: ${state.db.links.length}`,
-    `Carpetas: ${state.db.categories.length}`
-  ].join("\n");
-  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 async function createCategory() {
@@ -769,53 +908,19 @@ async function addLink(event) {
   toast("Enlace agregado");
 }
 
-async function enrichPreviews() {
-  const original = els.enrichButton.innerHTML;
-  els.enrichButton.disabled = true;
-  els.enrichButton.innerHTML = `${icon("refresh-cw")} Actualizando...`;
-  try {
-    const result = await api("/api/previews/enrich", {
-      method: "POST",
-      body: JSON.stringify({ limit: 24, onlyMissing: true })
-    });
-    await load();
-    if (result.processed === 0) {
-      toast("No hay vistas pendientes");
-    } else {
-      toast(`Vistas actualizadas: ${result.updated}/${result.processed}`);
-    }
-  } finally {
-    els.enrichButton.disabled = false;
-    els.enrichButton.innerHTML = original;
-  }
-}
-
 function fillSettings() {
   const settings = state.db.settings || {};
-  const contact = settings.contact || {};
   const storage = settings.storage || {};
   const sync = settings.sync || {};
-  const updates = settings.updates || {};
-  els.supportEmailInput.value = contact.supportEmail || "";
-  els.paypalUrlInput.value = contact.paypalUrl || "";
+  const trash = settings.trash || {};
   els.storagePathInput.value = storage.path || "";
   els.storageFormatInput.value = storage.format || "json";
-  els.syncModeInput.value = sync.mode || "none";
+  els.syncModeInput.value = ["none", "webdav", "ip"].includes(sync.mode) ? sync.mode : "none";
   els.remoteUrlInput.value = sync.remoteUrl || "";
   els.webdavUrlInput.value = sync.webdavUrl || "";
-  els.syncFolderPathInput.value = sync.folderPath || "";
   els.autoSyncInput.checked = sync.autoOnOpen !== false;
-  els.syncUserInput.value = sync.username || "";
-  els.syncPasswordInput.value = sync.password || "";
-  els.googleClientIdInput.value = sync.googleClientId || "";
-  els.googleClientSecretInput.value = sync.googleClientSecret || "";
-  els.googleStatusText.textContent = sync.googleEmail
-    ? `Conectado: ${sync.googleEmail}`
-    : "Google Drive sin conectar";
-  els.latestVersionUrlInput.value = updates.latestVersionUrl || "";
-  els.androidUrlInput.value = updates.androidUrl || "";
-  els.iosUrlInput.value = updates.iosUrl || "";
-  els.pcUrlInput.value = updates.pcUrl || "";
+  const retention = String(trash.retentionDays || 30);
+  els.trashRetentionDaysInput.value = ["5", "10", "15", "30"].includes(retention) ? retention : "30";
   els.installedVersionInput.value = "Consultando...";
   checkVersion(false).catch(() => {
     els.installedVersionInput.value = "0.2.0";
@@ -823,11 +928,8 @@ function fillSettings() {
 }
 
 async function saveSettings() {
+  const currentUpdates = state.db.settings?.updates || {};
   const settings = {
-    contact: {
-      supportEmail: els.supportEmailInput.value.trim(),
-      paypalUrl: els.paypalUrlInput.value.trim()
-    },
     storage: {
       path: els.storagePathInput.value.trim(),
       format: els.storageFormatInput.value
@@ -838,18 +940,15 @@ async function saveSettings() {
       autoOnOpen: els.autoSyncInput.checked,
       remoteUrl: els.remoteUrlInput.value.trim(),
       webdavUrl: els.webdavUrlInput.value.trim(),
-      folderPath: els.syncFolderPathInput.value.trim(),
-      username: els.syncUserInput.value.trim(),
-      password: els.syncPasswordInput.value,
-      googleClientId: els.googleClientIdInput.value.trim(),
-      googleClientSecret: els.googleClientSecretInput.value.trim(),
-      googleFileName: "linkoteca.json"
+      folderPath: "",
+      username: "",
+      password: ""
+    },
+    trash: {
+      retentionDays: Number(els.trashRetentionDaysInput.value || 30)
     },
     updates: {
-      latestVersionUrl: els.latestVersionUrlInput.value.trim(),
-      androidUrl: els.androidUrlInput.value.trim(),
-      iosUrl: els.iosUrlInput.value.trim(),
-      pcUrl: els.pcUrlInput.value.trim()
+      ...currentUpdates
     }
   };
   const data = await api("/api/settings", {
@@ -878,14 +977,6 @@ async function checkVersion(showToast = true) {
   }
 }
 
-async function connectGoogle() {
-  await saveSettings();
-  const result = await api("/api/google/auth-url", { method: "POST" });
-  window.open(result.authUrl, "_blank", "noopener");
-  els.googleStatusText.textContent = "Completa el acceso en Google y vuelve a Linkoteca";
-  toast("Abriendo acceso a Google Drive");
-}
-
 async function chooseFolder(targetInput, title) {
   const result = await api("/api/folders/pick", {
     method: "POST",
@@ -901,24 +992,7 @@ async function chooseFolder(targetInput, title) {
 }
 
 function downloadData() {
-  const format = els.downloadFormatInput.value || "json";
-  window.open(`/api/export/${format}`, "_blank", "noopener");
-}
-
-async function installApp() {
-  if (state.installPrompt) {
-    state.installPrompt.prompt();
-    await state.installPrompt.userChoice;
-    state.installPrompt = null;
-    toast("Solicitud de instalación enviada");
-    return;
-  }
-  const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (isiOS) {
-    toast("En iOS: Compartir y luego Agregar a pantalla de inicio");
-    return;
-  }
-  toast("Usa el menú del navegador para instalar Linkoteca");
+  window.open(apiUrl("/api/export/json"), "_blank", "noopener");
 }
 
 async function exportLocal() {
@@ -932,36 +1006,6 @@ async function exportLocal() {
     })
   });
   toast(`Exportado: ${result.written.length} archivos`);
-}
-
-async function exportGallery() {
-  await saveSettings();
-  const result = await api("/api/export/gallery", {
-    method: "POST",
-    body: JSON.stringify({
-      folderPath: els.storagePathInput.value.trim()
-    })
-  });
-  toast(`Galería creada: ${result.folders} carpetas`);
-}
-
-async function autoClassifyBatch() {
-  const original = els.autoClassifyButton.innerHTML;
-  els.autoClassifyButton.disabled = true;
-  els.autoClassifyButton.innerHTML = `${icon("sparkles")} Clasificando...`;
-  try {
-    const result = await api("/api/classify/batch", {
-      method: "POST",
-      body: JSON.stringify({ limit: 50 })
-    });
-    await load();
-    toast(result.moved === 0
-      ? "No encontré enlaces pendientes para reclasificar"
-      : `${result.moved} enlaces clasificados automáticamente`);
-  } finally {
-    els.autoClassifyButton.disabled = false;
-    els.autoClassifyButton.innerHTML = original;
-  }
 }
 
 async function exportDesktop() {
@@ -1009,36 +1053,31 @@ async function load() {
 }
 
 els.allLinksButton.addEventListener("click", () => {
+  clearSelection();
   state.activeCategoryId = "all";
   render();
 });
 
-els.reviewLinksButton.addEventListener("click", () => {
-  state.activeCategoryId = "review";
-  render();
-});
-
 els.duplicatesButton.addEventListener("click", () => {
+  clearSelection();
   state.activeCategoryId = "duplicates";
   render();
 });
 
 els.trashButton.addEventListener("click", () => {
+  clearSelection();
   state.activeCategoryId = "trash";
   render();
 });
 
 els.searchInput.addEventListener("input", (event) => {
+  clearSelection();
   state.search = event.target.value;
   renderGallery();
 });
 
 els.addLinkForm.addEventListener("submit", (event) => {
   addLink(event).catch((error) => toast(error.message));
-});
-
-els.enrichButton.addEventListener("click", () => {
-  enrichPreviews().catch((error) => toast(error.message));
 });
 
 els.confirmMoveButton.addEventListener("click", () => {
@@ -1053,16 +1092,30 @@ els.detailCopyButton.addEventListener("click", () => {
   copyDetailUrl();
 });
 
-els.detailSaveButton.addEventListener("click", () => {
-  saveDetail().catch((error) => toast(error.message));
+els.detailTitleInput.addEventListener("input", () => {
+  scheduleDetailAutosave();
 });
 
-els.detailArchiveButton.addEventListener("click", () => {
-  archiveCurrentDetailLink().catch((error) => toast(error.message));
+els.detailDescriptionInput.addEventListener("input", () => {
+  scheduleDetailAutosave();
+});
+
+els.detailCategorySelect.addEventListener("change", () => {
+  scheduleDetailAutosave();
+});
+
+els.detailDeleteButton.addEventListener("click", () => {
+  deleteCurrentDetailLink().catch((error) => toast(error.message));
 });
 
 els.detailDialog.addEventListener("close", () => {
+  clearTimeout(state.detailSaveTimer);
+  if (state.detailDirty && state.detailLinkId) {
+    saveDetail({ silent: true }).catch((error) => toast(error.message));
+  }
   els.detailPreview.innerHTML = "";
+  state.detailLinkId = null;
+  state.detailDirty = false;
 });
 
 els.newCategoryButton.addEventListener("click", () => {
@@ -1074,6 +1127,19 @@ els.confirmCategoryButton.addEventListener("click", () => {
   createCategory().catch((error) => toast(error.message));
 });
 
+els.confirmYesButton.addEventListener("click", () => {
+  resolveConfirm(true);
+});
+
+els.confirmNoButton.addEventListener("click", () => {
+  resolveConfirm(false);
+});
+
+els.confirmDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  resolveConfirm(false);
+});
+
 els.settingsButton.addEventListener("click", () => {
   fillSettings();
   els.settingsDialog.showModal();
@@ -1083,36 +1149,12 @@ els.saveSettingsButton.addEventListener("click", () => {
   saveSettings().catch((error) => toast(error.message));
 });
 
-els.reportErrorButton.addEventListener("click", () => {
-  openMail("error");
-});
-
-els.suggestionButton.addEventListener("click", () => {
-  openMail("suggestion");
-});
-
-els.donateButton.addEventListener("click", () => {
-  openExternal(els.paypalUrlInput.value.trim(), "Confirma primero el link de PayPal");
+els.githubProfileButton.addEventListener("click", () => {
+  window.open(GITHUB_PROFILE_URL, "_blank", "noopener");
 });
 
 els.checkVersionButton.addEventListener("click", () => {
   checkVersion(true).catch((error) => toast(error.message));
-});
-
-els.installAppButton.addEventListener("click", () => {
-  installApp().catch((error) => toast(error.message));
-});
-
-els.downloadAndroidButton.addEventListener("click", () => {
-  window.open(apiUrl("/api/download/android"), "_blank", "noopener");
-});
-
-els.downloadIosButton.addEventListener("click", () => {
-  window.open(apiUrl("/api/download/ios"), "_blank", "noopener");
-});
-
-els.downloadPcButton.addEventListener("click", () => {
-  window.open(apiUrl("/api/download/pc"), "_blank", "noopener");
 });
 
 els.downloadDataButton.addEventListener("click", () => {
@@ -1127,16 +1169,8 @@ els.exportLocalButton.addEventListener("click", () => {
   exportLocal().catch((error) => toast(error.message));
 });
 
-els.exportGalleryButton.addEventListener("click", () => {
-  exportGallery().catch((error) => toast(error.message));
-});
-
 els.exportDesktopButton.addEventListener("click", () => {
   exportDesktop().catch((error) => toast(error.message));
-});
-
-els.autoClassifyButton.addEventListener("click", () => {
-  autoClassifyBatch().catch((error) => toast(error.message));
 });
 
 els.folderSearchInput.addEventListener("input", (event) => {
@@ -1149,12 +1183,17 @@ els.toggleFoldersButton.addEventListener("click", () => {
   renderCategories();
 });
 
-els.chooseSyncFolderButton.addEventListener("click", () => {
-  chooseFolder(els.syncFolderPathInput, "Elegir carpeta sincronizada").catch((error) => toast(error.message));
+els.bulkDeleteButton.addEventListener("click", () => {
+  bulkDeleteSelected().catch((error) => toast(error.message));
 });
 
-els.connectGoogleButton.addEventListener("click", () => {
-  connectGoogle().catch((error) => toast(error.message));
+els.bulkRestoreButton.addEventListener("click", () => {
+  bulkRestoreSelected().catch((error) => toast(error.message));
+});
+
+els.clearSelectionButton.addEventListener("click", () => {
+  clearSelection();
+  renderGallery();
 });
 
 els.pullSyncButton.addEventListener("click", () => {
@@ -1176,11 +1215,6 @@ els.useLocalApiButton.addEventListener("click", () => {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
-
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  state.installPrompt = event;
-});
 
 window.addEventListener("linkoteca:shared-link", (event) => {
   queueSharedLink(event.detail || {});

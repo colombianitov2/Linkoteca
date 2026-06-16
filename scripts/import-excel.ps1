@@ -252,7 +252,7 @@ try {
     }
   }
 
-  $review = Get-OrAddCategory $script:CategoryList $categoryMap "Por revisar" $now "system"
+  $review = Get-OrAddCategory $script:CategoryList $categoryMap "General" $now "system"
   $review.source = "system"
 
   $database = [ordered]@{

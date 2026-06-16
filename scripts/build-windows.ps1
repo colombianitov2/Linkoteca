@@ -17,7 +17,17 @@ if (Test-Path -LiteralPath $DistDir) {
 }
 
 npm run check
-npx electron-builder --win nsis portable
+npx electron-builder --win dir
+
+$WinUnpacked = Join-Path $DistDir "win-unpacked"
+$AppExe = Join-Path $WinUnpacked "Linkoteca.exe"
+$IconPath = Join-Path $ProjectRoot "build\icon.ico"
+$Rcedit = Join-Path $ProjectRoot "node_modules\electron-winstaller\vendor\rcedit.exe"
+if ((Test-Path -LiteralPath $AppExe) -and (Test-Path -LiteralPath $IconPath) -and (Test-Path -LiteralPath $Rcedit)) {
+  & $Rcedit $AppExe --set-icon $IconPath
+}
+
+npx electron-builder --win nsis portable --prepackaged "$WinUnpacked"
 
 Write-Host ""
 Write-Host "Ejecutables Windows generados en:" -ForegroundColor Green

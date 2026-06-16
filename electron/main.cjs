@@ -1,10 +1,11 @@
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, BrowserWindow, Menu, shell } = require("electron");
+const { app, BrowserWindow, Menu, shell, session } = require("electron");
 
 const port = process.env.LINKOTECA_PORT || "4387";
 const appUrl = `http://localhost:${port}`;
+const iconPath = path.join(__dirname, "..", "build", "icon.ico");
 
 let mainWindow;
 
@@ -50,6 +51,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     title: "Linkoteca",
+    icon: iconPath,
     backgroundColor: "#fbfaf7",
     webPreferences: {
       contextIsolation: true,
@@ -69,6 +71,10 @@ function createWindow() {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await ensureServer();
+  await session.defaultSession.clearStorageData({
+    origin: appUrl,
+    storages: ["serviceworkers", "cachestorage"]
+  }).catch(() => {});
   createWindow();
 });
 

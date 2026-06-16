@@ -19,10 +19,8 @@ const publicDir = path.join(projectRoot, "public");
 const defaultExcelPath = "C:\\Users\\erpec\\Desktop\\Links.xlsx";
 const port = Number(process.env.PORT || 4387);
 const appUrl = `http://localhost:${port}`;
-const appVersion = "0.3.0-beta.1";
-const releaseTag = "v0.3.0-beta.1";
-const releaseBaseUrl = `https://github.com/colombianitov2/linkoteca-beta/releases/download/${releaseTag}`;
-const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/linkoteca-beta/main/updates/latest.json";
+const appVersion = "0.3.0-beta.2";
+const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/Linkoteca/main/updates/latest.json";
 
 const blockedRoots = [
   path.resolve("D:\\Nube"),
@@ -64,8 +62,7 @@ function defaultSettings() {
     contact: {
       ownerName: "Ernesto Pernett",
       ownerTitle: "Ingeniero Mecánico",
-      supportEmail: "epernett1020@hotmail.com",
-      paypalUrl: "https://www.paypal.com/paypalme/Wolframica?locale.x=es_XC&country.x=CO"
+      supportEmail: "epernett1020@hotmail.com"
     },
     storage: {
       path: defaultExportDir,
@@ -79,36 +76,48 @@ function defaultSettings() {
       webdavUrl: "",
       folderPath: "",
       username: "",
-      password: "",
-      googleClientId: "",
-      googleClientSecret: "",
-      googleRefreshToken: "",
-      googleAccessToken: "",
-      googleTokenExpiresAt: "",
-      googleEmail: "",
-      googleFileName: "linkoteca.json"
+      password: ""
+    },
+    trash: {
+      retentionDays: 30
     },
     updates: {
-      latestVersionUrl,
-      androidUrl: `${releaseBaseUrl}/Linkoteca-Android-debug.apk`,
-      iosUrl: `${releaseBaseUrl}/Linkoteca-macOS.dmg`,
-      pcUrl: `${releaseBaseUrl}/Linkoteca-Windows-Setup.exe`
+      latestVersionUrl
     }
   };
 }
 
 function mergeSettings(settings = {}) {
   const defaults = defaultSettings();
-  const updates = { ...defaults.updates, ...(settings.updates || {}) };
+  const updates = {
+    latestVersionUrl: settings.updates?.latestVersionUrl || defaults.updates.latestVersionUrl
+  };
+  const rawSync = { ...defaults.sync, ...(settings.sync || {}) };
+  const allowedModes = new Set(["none", "webdav", "ip"]);
+  const mode = allowedModes.has(rawSync.mode) ? rawSync.mode : "none";
+  const retentionDays = [5, 10, 15, 30].includes(Number(settings.trash?.retentionDays))
+    ? Number(settings.trash.retentionDays)
+    : defaults.trash.retentionDays;
   for (const key of Object.keys(defaults.updates)) {
     if (!updates[key]) updates[key] = defaults.updates[key];
   }
   return {
     ...defaults,
     ...settings,
-    contact: { ...defaults.contact, ...(settings.contact || {}) },
+    contact: { ...defaults.contact, supportEmail: "epernett1020@hotmail.com" },
     storage: { ...defaults.storage, ...(settings.storage || {}) },
-    sync: { ...defaults.sync, ...(settings.sync || {}) },
+    sync: {
+      ...defaults.sync,
+      mode,
+      provider: mode,
+      autoOnOpen: rawSync.autoOnOpen !== false,
+      remoteUrl: String(rawSync.remoteUrl || "").trim(),
+      webdavUrl: String(rawSync.webdavUrl || "").trim(),
+      folderPath: String(rawSync.folderPath || "").trim(),
+      username: "",
+      password: ""
+    },
+    trash: { retentionDays },
     updates
   };
 }
@@ -117,6 +126,12 @@ function ensureDatabaseShape(db) {
   db.version = db.version || 1;
   db.categories = Array.isArray(db.categories) ? db.categories : [];
   db.links = Array.isArray(db.links) ? db.links : [];
+  for (const link of db.links) {
+    if (link.status === ["auto", "clasificado"].join("-")) link.status = "confirmado";
+    if (link.archived && link.status === "archivado") link.status = "eliminado";
+    delete link[["auto", "Classified"].join("")];
+    delete link.classificationMethod;
+  }
   db.settings = mergeSettings(db.settings);
   db.safety = {
     writableRoot,
@@ -182,6 +197,23 @@ function thumbnailFromUrl(url) {
   const youtubeId = getYouTubeId(url);
   if (youtubeId) return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   return "";
+}
+
+function isInstagramUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase().includes("instagram.com");
+  } catch {
+    return false;
+  }
+}
+
+function isFacebookUrl(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return host.includes("facebook.com") || host.includes("fb.watch");
+  } catch {
+    return false;
+  }
 }
 
 function decodeHtmlEntities(value) {
@@ -265,97 +297,6 @@ async function fetchYouTubePreview(url) {
   }
 }
 
-const CLASSIFICATION_RULES = [
-  { patterns: [/github\.com|gitlab\.com|bitbucket\.org/i], keywords: ["repo", "codigo", "programacion", "desarrollo"], category: "Programas" },
-  { patterns: [/stackoverflow\.com|stackexchange\.com|npmjs\.com|pypi\.org/i], keywords: ["error", "solucion", "paquete", "libreria"], category: "Programas" },
-  { patterns: [/amazon\.|mercadolibre\.|ebay\.|aliexpress\.|temu\.|shopify\./i], keywords: ["comprar", "producto", "precio", "oferta", "tienda"], category: "Compras" },
-  { patterns: [/booking\.|airbnb\.|tripadvisor\.|expedia\.|despegar\.|skyscanner\./i], keywords: ["viaje", "hotel", "vuelo", "turismo", "reserva"], category: "Para visitar-Viajes" },
-  { patterns: [/maps\.google\.|google\.[^/]+\/maps/i], keywords: ["mapa", "ubicacion", "ruta", "direccion"], category: "Para visitar-Viajes" },
-  { patterns: [/udemy\.|coursera\.|platzi\.|edx\.|skillshare\.|domestika\./i], keywords: ["curso", "clase", "aprender", "formacion"], category: "Estudios-Cursos-Clases" },
-  { patterns: [/drive\.google\.|docs\.google\.|notion\.so|trello\.com/i], keywords: ["documento", "nota", "organizacion"], category: "Trabajo-Negocios" },
-  { patterns: [/spotify\.|soundcloud\.|music\.apple\./i], keywords: ["musica", "playlist", "cancion", "podcast"], category: "Modelo de vida" },
-  { patterns: [/instagram\.|facebook\.|fb\.watch|tiktok\.|x\.com|twitter\.|linkedin\./i], keywords: ["red social", "reel", "post", "perfil"], category: "Social-Financiero" }
-];
-
-const KEYWORD_GROUPS = [
-  { keywords: ["ingenier", "mecanica", "termodinamica", "fluidos", "materiales", "calculo", "solidworks", "autocad", "cad", "simulacion", "fem", "fea", "industrial"], category: "Ingeniería" },
-  { keywords: ["viaje", "viajar", "turismo", "destino", "playa", "hotel", "hostal", "mochilero", "aventura", "visitar"], category: "Para visitar-Viajes" },
-  { keywords: ["colombia", "bogota", "medellin", "cartagena", "barranquilla", "cali", "santa marta", "san andres"], category: "Para visitar-Viajes" },
-  { keywords: ["receta", "cocina", "comida", "ingrediente", "preparar", "cocinar", "gastronomia"], category: "Cocina-recetas" },
-  { keywords: ["ejercicio", "fitness", "gimnasio", "rutina", "salud", "nutricion", "deporte"], category: "Ejercicios" },
-  { keywords: ["inversion", "finanzas", "ahorro", "cripto", "bitcoin", "trading", "bolsa", "dinero", "negocio"], category: "Social-Financiero" },
-  { keywords: ["comprar", "producto", "precio", "oferta", "tienda", "catalogo", "amazon", "mercado libre"], category: "Compras" },
-  { keywords: ["carro", "auto", "automotriz", "vehiculo", "motor", "repuesto", "pintura automotriz"], category: "Carro" },
-  { keywords: ["casa", "hogar", "herramienta", "mueble", "decoracion", "reparacion"], category: "Para la casa" },
-  { keywords: ["curso", "clase", "estudi", "aprender", "tutorial", "guia", "paso a paso"], category: "Estudios-Cursos-Clases" },
-  { keywords: ["programa", "software", "app", "codigo", "script", "extension", "github"], category: "Programas" },
-  { keywords: ["proyecto", "emprendimiento", "idea", "prototipo", "plan"], category: "Proyectos" },
-  { keywords: ["juego", "gaming", "gamer", "videojuego", "consola"], category: "Juegos" },
-  { keywords: ["trabajo", "negocio", "empresa", "cliente", "venta", "marketing"], category: "Trabajo-Negocios" }
-];
-
-function findBestCategoryMatch(name, categories) {
-  const target = String(name || "").toLowerCase().trim();
-  const exact = categories.find((category) => category.name.toLowerCase() === target);
-  if (exact) return exact;
-  return categories.find((category) => {
-    const current = category.name.toLowerCase();
-    return current.includes(target) || target.includes(current);
-  }) || null;
-}
-
-function classifyLink(link, categories) {
-  const url = String(link.url || "").toLowerCase();
-  const title = String(link.title || "").toLowerCase();
-  const description = String(link.description || "").toLowerCase();
-  const haystack = `${url} ${title} ${description}`;
-
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const rule of CLASSIFICATION_RULES) {
-    const domainScore = rule.patterns.some((pattern) => pattern.test(url)) ? 2 : 0;
-    const keywordScore = rule.keywords.filter((keyword) => haystack.includes(keyword)).length;
-    const score = domainScore + keywordScore;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = { category: rule.category, method: domainScore ? "domain" : "keywords" };
-    }
-  }
-
-  for (const group of KEYWORD_GROUPS) {
-    const score = group.keywords.filter((keyword) => haystack.includes(keyword)).length;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = { category: group.category, method: "keywords" };
-    }
-  }
-
-  for (const category of categories) {
-    const words = category.name.toLowerCase().split(/[\s-]+/).filter((word) => word.length > 2);
-    const score = words.filter((word) => haystack.includes(word)).length * 2;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = { category: category.name, categoryId: category.id, method: "existing-category" };
-    }
-  }
-
-  if (!bestMatch || bestScore < 1) {
-    return { categoryName: "Por revisar", confidence: 0, method: "fallback" };
-  }
-
-  if (bestMatch.categoryId) {
-    return { categoryId: bestMatch.categoryId, confidence: Math.min(bestScore * 0.25, 0.95), method: bestMatch.method };
-  }
-
-  const category = findBestCategoryMatch(bestMatch.category, categories);
-  if (category) {
-    return { categoryId: category.id, confidence: Math.min(bestScore * 0.25, 0.95), method: bestMatch.method };
-  }
-
-  return { categoryName: bestMatch.category, confidence: Math.min(bestScore * 0.2, 0.85), method: bestMatch.method };
-}
-
 function emptyDatabase() {
   const now = new Date().toISOString();
   return {
@@ -401,6 +342,64 @@ async function writeDatabase(db) {
   const nextRaw = `${JSON.stringify(db, null, 2)}\n`;
   await backupDatabaseIfChanged(nextRaw);
   await fs.writeFile(dbPath, nextRaw, "utf8");
+}
+
+async function fetchInstagramOEmbedPreview(url) {
+  if (!isInstagramUrl(url)) return null;
+  const endpoint = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch(endpoint, { signal: controller.signal });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      title: cleanPreviewText(data.title || data.author_name || "Publicación de Instagram"),
+      description: data.author_name ? `Instagram: ${data.author_name}` : "Vista previa de Instagram",
+      thumbnail: "",
+      platform: "Instagram"
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function previewUserAgentsForUrl(url) {
+  if (isInstagramUrl(url)) {
+    return [
+      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      "WhatsApp/2.23.20.0 A",
+      "Twitterbot/1.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
+    ];
+  }
+  if (isFacebookUrl(url)) {
+    return [
+      "WhatsApp/2.23.20.0 A",
+      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
+    ];
+  }
+  return [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
+  ];
+}
+
+function pruneExpiredTrash(db) {
+  const retentionDays = [5, 10, 15, 30].includes(Number(db.settings?.trash?.retentionDays))
+    ? Number(db.settings.trash.retentionDays)
+    : 30;
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const before = db.links.length;
+  db.links = db.links.filter((link) => {
+    if (!link.archived || !link.archivedAt) return true;
+    const archivedAt = new Date(link.archivedAt).getTime();
+    if (!Number.isFinite(archivedAt)) return true;
+    return archivedAt >= cutoff;
+  });
+  return before - db.links.length;
 }
 
 async function backupDatabaseIfChanged(nextRaw) {
@@ -487,6 +486,22 @@ function safeLinkPayload(body) {
   };
 }
 
+function markLinkDeleted(link, now = new Date().toISOString()) {
+  link.archived = true;
+  link.archivedAt = now;
+  link.status = "eliminado";
+  link.updatedAt = now;
+  return link;
+}
+
+function restoreDeletedLink(link, now = new Date().toISOString()) {
+  link.archived = false;
+  link.archivedAt = "";
+  if (link.status === "archivado" || link.status === "eliminado") link.status = "confirmado";
+  link.updatedAt = now;
+  return link;
+}
+
 function mergeRemoteDatabase(local, remote) {
   const merged = structuredClone(local);
   const categories = new Map(merged.categories.map((category) => [category.id, category]));
@@ -526,33 +541,48 @@ function faviconFallback(url) {
 async function fetchPreview(url) {
   const youtubePreview = await fetchYouTubePreview(url);
   if (youtubePreview) return youtubePreview;
+  const instagramOEmbedPreview = await fetchInstagramOEmbedPreview(url);
 
   const base = {
-    title: "",
-    description: "",
+    title: instagramOEmbedPreview?.title || "",
+    description: instagramOEmbedPreview?.description || "",
     thumbnail: thumbnailFromUrl(url),
-    platform: detectPlatform(url)
+    platform: instagramOEmbedPreview?.platform || detectPlatform(url)
   };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "user-agent": "Linkoteca/0.2 (+local preview fetcher)"
-      }
-    });
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("text/html")) return base;
-    const html = await response.text();
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    base.title = cleanPreviewText(pickMeta(html, ["og:title", "twitter:title"]) || titleMatch?.[1] || "");
-    base.description = cleanPreviewText(pickMeta(html, ["og:description", "twitter:description", "description"]));
-    base.thumbnail = base.thumbnail || absolutizeUrl(pickMeta(html, ["og:image", "twitter:image", "image"]), url);
-  } catch {
-    // Mantiene la base y usa favicon como miniatura si no hubo OpenGraph.
-  } finally {
-    clearTimeout(timeout);
+  for (const userAgent of previewUserAgentsForUrl(url)) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "es-ES,es;q=0.9,en;q=0.8",
+          "user-agent": userAgent
+        }
+      });
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("text/html")) continue;
+      const html = await response.text();
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      const title = cleanPreviewText(pickMeta(html, ["og:title", "twitter:title"]) || titleMatch?.[1] || "");
+      const description = cleanPreviewText(pickMeta(html, ["og:description", "twitter:description", "description"]));
+      const image = absolutizeUrl(pickMeta(html, ["og:image", "twitter:image", "twitter:image:src", "image"]), url);
+      const platform = isInstagramUrl(url)
+        ? "Instagram"
+        : isFacebookUrl(url)
+          ? "Facebook"
+          : cleanPreviewText(pickMeta(html, ["og:site_name", "twitter:site"]) || detectPlatform(url));
+      if (title && !/^instagram$/i.test(title)) base.title = title;
+      if (description) base.description = description;
+      if (image) base.thumbnail = image;
+      if (platform) base.platform = platform;
+      if (base.title && base.thumbnail) break;
+    } catch {
+      // Sigue probando otros agentes de vista previa.
+    } finally {
+      clearTimeout(timeout);
+    }
   }
   if (!base.thumbnail) base.thumbnail = faviconFallback(url);
   return base;
@@ -616,203 +646,34 @@ function sanitizeLinkPreviewFields(link) {
 }
 
 function syncHeaders(settings) {
-  const headers = { "content-type": "application/json" };
-  if (settings.username && settings.password) {
-    const token = Buffer.from(`${settings.username}:${settings.password}`).toString("base64");
-    headers.authorization = `Basic ${token}`;
-  }
-  return headers;
+  return { "content-type": "application/json" };
+}
+
+function looksLikeFilePath(value) {
+  const text = String(value || "").trim();
+  return /^[a-zA-Z]:[\\/]/.test(text) || /^\\\\[^\\]+\\[^\\]+/.test(text);
 }
 
 function getSyncUrl(settings) {
   if (settings.mode === "webdav") return settings.webdavUrl;
-  if (settings.mode === "ip") return settings.remoteUrl;
+  if (settings.mode === "ip" && !looksLikeFilePath(settings.remoteUrl)) return settings.remoteUrl;
   return "";
 }
 
 function getFolderSyncPath(settings) {
-  if (!["localFolder", "oneDrive"].includes(settings.mode)) return "";
-  const folderPath = String(settings.folderPath || settings.storagePath || "").trim();
-  if (!folderPath) return "";
-  return path.join(folderPath, "linkoteca.json");
+  if (settings.mode !== "ip") return "";
+  const target = String(settings.remoteUrl || "").trim();
+  if (!looksLikeFilePath(target)) return "";
+  return path.extname(target).toLowerCase() === ".json"
+    ? target
+    : path.join(target, "linkoteca.json");
 }
 
 function effectiveUpdates(settings = {}) {
   const defaults = defaultSettings().updates;
   return {
-    latestVersionUrl: settings.latestVersionUrl || defaults.latestVersionUrl,
-    androidUrl: settings.androidUrl || defaults.androidUrl,
-    iosUrl: settings.iosUrl || defaults.iosUrl,
-    pcUrl: settings.pcUrl || defaults.pcUrl
+    latestVersionUrl: settings.latestVersionUrl || defaults.latestVersionUrl
   };
-}
-
-function googleRedirectUri() {
-  return `${appUrl}/api/google/callback`;
-}
-
-function googleConfig(settings = {}) {
-  return {
-    clientId: String(settings.googleClientId || "").trim(),
-    clientSecret: String(settings.googleClientSecret || "").trim(),
-    refreshToken: String(settings.googleRefreshToken || "").trim(),
-    accessToken: String(settings.googleAccessToken || "").trim(),
-    tokenExpiresAt: String(settings.googleTokenExpiresAt || "").trim(),
-    email: String(settings.googleEmail || "").trim(),
-    fileName: String(settings.googleFileName || "linkoteca.json").trim() || "linkoteca.json"
-  };
-}
-
-function ensureGoogleConfigured(settings = {}) {
-  const config = googleConfig(settings);
-  if (!config.clientId || !config.clientSecret) {
-    throw new Error("Configura Google Client ID y Client Secret primero");
-  }
-  return config;
-}
-
-async function exchangeGoogleToken(params) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error_description || data.error || `Google respondio ${response.status}`);
-  return data;
-}
-
-async function getGoogleUser(accessToken) {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
-  if (!response.ok) return {};
-  return response.json();
-}
-
-async function googleAccessToken(db) {
-  const settings = db.settings.sync || {};
-  const config = ensureGoogleConfigured(settings);
-  const expiresAt = new Date(config.tokenExpiresAt || 0).getTime();
-  if (config.accessToken && expiresAt - Date.now() > 60000) return config.accessToken;
-  if (!config.refreshToken) throw new Error("Conecta una cuenta Google primero");
-
-  const token = await exchangeGoogleToken({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    refresh_token: config.refreshToken,
-    grant_type: "refresh_token"
-  });
-
-  settings.googleAccessToken = token.access_token;
-  settings.googleTokenExpiresAt = new Date(Date.now() + Number(token.expires_in || 3600) * 1000).toISOString();
-  db.settings.sync = settings;
-  await writeDatabase(db);
-  return settings.googleAccessToken;
-}
-
-async function googleDriveRequest(accessToken, url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      ...(options.headers || {})
-    }
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Google Drive respondio ${response.status}${text ? `: ${text.slice(0, 180)}` : ""}`);
-  }
-  return response;
-}
-
-async function findGoogleBackupFile(accessToken, fileName) {
-  const query = encodeURIComponent(`name='${fileName.replaceAll("'", "\\'")}' and trashed=false`);
-  const url = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime)`;
-  const response = await googleDriveRequest(accessToken, url);
-  const data = await response.json();
-  return data.files?.[0] || null;
-}
-
-function databaseForCloudBackup(db) {
-  const backup = structuredClone(db);
-  if (backup.settings?.sync) {
-    delete backup.settings.sync.password;
-    delete backup.settings.sync.googleClientSecret;
-    delete backup.settings.sync.googleRefreshToken;
-    delete backup.settings.sync.googleAccessToken;
-    delete backup.settings.sync.googleTokenExpiresAt;
-  }
-  return backup;
-}
-
-function googleMultipartBody(metadata, content) {
-  const boundary = `linkoteca-${crypto.randomUUID()}`;
-  const body = [
-    `--${boundary}`,
-    "Content-Type: application/json; charset=UTF-8",
-    "",
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    "Content-Type: application/json; charset=UTF-8",
-    "",
-    content,
-    `--${boundary}--`,
-    ""
-  ].join("\r\n");
-  return { boundary, body };
-}
-
-async function uploadGoogleBackup(db) {
-  const settings = db.settings.sync || {};
-  const config = googleConfig(settings);
-  const accessToken = await googleAccessToken(db);
-  const content = JSON.stringify(databaseForCloudBackup(db), null, 2);
-  const existing = await findGoogleBackupFile(accessToken, config.fileName);
-
-  if (existing) {
-    await googleDriveRequest(
-      accessToken,
-      `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json; charset=UTF-8" },
-        body: content
-      }
-    );
-    return { ok: true, provider: "googleDrive", fileId: existing.id, updated: true };
-  }
-
-  const multipart = googleMultipartBody({
-    name: config.fileName,
-    parents: ["appDataFolder"],
-    mimeType: "application/json"
-  }, content);
-
-  const response = await googleDriveRequest(
-    accessToken,
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name",
-    {
-      method: "POST",
-      headers: { "content-type": `multipart/related; boundary=${multipart.boundary}` },
-      body: multipart.body
-    }
-  );
-  const data = await response.json();
-  return { ok: true, provider: "googleDrive", fileId: data.id, updated: false };
-}
-
-async function downloadGoogleBackup(db) {
-  const settings = db.settings.sync || {};
-  const config = googleConfig(settings);
-  const accessToken = await googleAccessToken(db);
-  const existing = await findGoogleBackupFile(accessToken, config.fileName);
-  if (!existing) throw new Error("No hay backup de Linkoteca en Google Drive");
-  const response = await googleDriveRequest(
-    accessToken,
-    `https://www.googleapis.com/drive/v3/files/${existing.id}?alt=media`
-  );
-  return response.json();
 }
 
 function csvEscape(value) {
@@ -906,6 +767,11 @@ function linkSummaryText(link, categoryName) {
     `URL: ${link.url || ""}`,
     `Carpeta: ${categoryName || "Sin carpeta"}`,
     `Plataforma: ${link.platform || "Web"}`,
+    `Estado: ${link.status || "pendiente"}`,
+    `Confianza: ${typeof link.confidence === "number" ? link.confidence : 0}`,
+    `Etiquetas: ${Array.isArray(link.tags) && link.tags.length ? link.tags.join(", ") : ""}`,
+    `Origen: ${link.source || ""}`,
+    `Categoria ID: ${link.categoryId || ""}`,
     link.description ? `Descripcion: ${link.description}` : "",
     `Actualizado: ${link.updatedAt || ""}`
   ].filter(Boolean).join("\n");
@@ -913,6 +779,26 @@ function linkSummaryText(link, categoryName) {
 
 function shortcutFileBody(link) {
   return `[InternetShortcut]\nURL=${link.url || ""}\n`;
+}
+
+function linkMetadataJson(link, categoryName) {
+  return JSON.stringify({
+    title: link.title || "Enlace sin titulo",
+    url: link.url || "",
+    description: link.description || "",
+    thumbnail: link.thumbnail || "",
+    platform: link.platform || "Web",
+    status: link.status || "pendiente",
+    confidence: typeof link.confidence === "number" ? link.confidence : 0,
+    tags: Array.isArray(link.tags) ? link.tags : [],
+    categoryId: link.categoryId || "",
+    categoryName: categoryName || "Sin carpeta",
+    source: link.source || "",
+    sourceSheet: link.sourceSheet || "",
+    sourceCell: link.sourceCell || "",
+    createdAt: link.createdAt || "",
+    updatedAt: link.updatedAt || ""
+  }, null, 2);
 }
 
 function staticGalleryStyles() {
@@ -1173,6 +1059,7 @@ async function exportStaticGallery(db, folderPath) {
       const fileBase = `${String(index + 1).padStart(3, "0")} - ${safeFileName(link.title || hostFromUrlSafe(link.url), link.id)}`;
       await fs.writeFile(path.join(categoryDir, `${fileBase}.url`), shortcutFileBody(link), "utf8");
       await fs.writeFile(path.join(categoryDir, `${fileBase}.txt`), `${linkSummaryText(link, category.name)}\n`, "utf8");
+      await fs.writeFile(path.join(categoryDir, `${fileBase}.json`), `${linkMetadataJson(link, category.name)}\n`, "utf8");
       cards.push(staticLinkCard(link));
     }
 
@@ -1182,6 +1069,7 @@ async function exportStaticGallery(db, folderPath) {
       cards,
       backHref: "../index.html"
     }), "utf8");
+    await fs.writeFile(path.join(categoryDir, "index.txt"), `${links.map((link) => linkSummaryText(link, category.name)).join("\n\n")}\n`, "utf8");
     folderCards.push(staticFolderCard(category, links.length, folderName));
   }
 
@@ -1190,6 +1078,7 @@ async function exportStaticGallery(db, folderPath) {
     subtitle: `${activeLinks.length} enlaces activos organizados en ${byCategory.size} carpetas.`,
     cards: folderCards
   }), "utf8");
+  await fs.writeFile(path.join(root, "index.txt"), `${activeLinks.map((link) => linkSummaryText(link, categoryMap.get(link.categoryId)?.name || "Sin clasificar")).join("\n\n")}\n`, "utf8");
   await fs.writeFile(path.join(root, "linkoteca.json"), `${JSON.stringify(db, null, 2)}\n`, "utf8");
 
   return {
@@ -1257,6 +1146,7 @@ app.use(express.static(publicDir));
 
 app.get("/api/library", async (_req, res) => {
   const db = await readDatabase();
+  if (pruneExpiredTrash(db) > 0) await writeDatabase(db);
   res.json(db);
 });
 
@@ -1290,88 +1180,6 @@ app.get("/api/version", async (_req, res) => {
     latestVersionUrl,
     status
   });
-});
-
-app.get("/api/google/status", async (_req, res) => {
-  const db = await readDatabase();
-  const config = googleConfig(db.settings.sync || {});
-  res.json({
-    ok: true,
-    configured: Boolean(config.clientId && config.clientSecret),
-    connected: Boolean(config.refreshToken),
-    email: config.email,
-    fileName: config.fileName
-  });
-});
-
-app.post("/api/google/auth-url", async (_req, res) => {
-  try {
-    const db = await readDatabase();
-    const config = ensureGoogleConfigured(db.settings.sync || {});
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: googleRedirectUri(),
-      response_type: "code",
-      scope: [
-        "https://www.googleapis.com/auth/drive.appdata",
-        "openid",
-        "email",
-        "profile"
-      ].join(" "),
-      access_type: "offline",
-      prompt: "consent"
-    });
-    res.json({ ok: true, authUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-app.get("/api/google/callback", async (req, res) => {
-  try {
-    if (req.query.error) throw new Error(String(req.query.error));
-    const code = String(req.query.code || "");
-    if (!code) throw new Error("Google no devolvio codigo de autorizacion");
-    const db = await readDatabase();
-    const settings = db.settings.sync || {};
-    const config = ensureGoogleConfigured(settings);
-    const token = await exchangeGoogleToken({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: googleRedirectUri()
-    });
-    settings.googleRefreshToken = token.refresh_token || settings.googleRefreshToken || "";
-    settings.googleAccessToken = token.access_token || "";
-    settings.googleTokenExpiresAt = new Date(Date.now() + Number(token.expires_in || 3600) * 1000).toISOString();
-    const user = token.access_token ? await getGoogleUser(token.access_token) : {};
-    settings.googleEmail = user.email || settings.googleEmail || "";
-    settings.mode = "googleDrive";
-    settings.provider = "googleDrive";
-    db.settings.sync = settings;
-    await writeDatabase(db);
-    res.type("html").send(`
-      <!doctype html>
-      <meta charset="utf-8">
-      <title>Linkoteca conectada</title>
-      <body style="font-family: system-ui; padding: 32px; background: #f7f5ef; color: #181818">
-        <h1>Google Drive conectado</h1>
-        <p>Ya puedes volver a Linkoteca y usar Subir nube o Descargar nube.</p>
-        <p>Cuenta: ${String(settings.googleEmail || "conectada").replaceAll("<", "&lt;")}</p>
-      </body>
-    `);
-  } catch (error) {
-    res.status(400).type("html").send(`
-      <!doctype html>
-      <meta charset="utf-8">
-      <title>Error conectando Google</title>
-      <body style="font-family: system-ui; padding: 32px; background: #fff5f5; color: #181818">
-        <h1>No se pudo conectar Google Drive</h1>
-        <p>${String(error.message).replaceAll("<", "&lt;")}</p>
-      </body>
-    `);
-  }
 });
 
 app.get("/api/export/:format", async (req, res) => {
@@ -1415,7 +1223,7 @@ app.post("/api/export/gallery", async (req, res) => {
 app.post("/api/export/desktop", async (_req, res) => {
   try {
     const db = await readDatabase();
-    const desktopPath = path.join(process.env.USERPROFILE || process.env.HOME || defaultExportDir, "Desktop");
+    const desktopPath = path.resolve(process.env.USERPROFILE || process.env.HOME || defaultExportDir, "Desktop");
     const result = await exportStaticGallery(db, desktopPath);
     res.json({ ok: true, ...result });
   } catch (error) {
@@ -1509,6 +1317,23 @@ app.patch("/api/categories/:id", async (req, res) => {
   }
 });
 
+app.delete("/api/categories/:id", async (req, res) => {
+  try {
+    const db = await readDatabase();
+    const categoryIndex = db.categories.findIndex((item) => item.id === req.params.id);
+    if (categoryIndex < 0) return res.status(404).json({ ok: false, error: "Carpeta no encontrada" });
+    const [category] = db.categories.splice(categoryIndex, 1);
+    const now = new Date().toISOString();
+    const links = db.links
+      .filter((link) => link.categoryId === category.id && !link.archived)
+      .map((link) => markLinkDeleted(link, now));
+    await writeDatabase(db);
+    res.json({ ok: true, category, links, deletedLinks: links.length });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/links", async (req, res) => {
   try {
     const db = await readDatabase();
@@ -1523,7 +1348,7 @@ app.post("/api/links", async (req, res) => {
     }
     const category = req.body.categoryId
       ? db.categories.find((item) => item.id === req.body.categoryId)
-      : categoryByName(db, req.body.categoryName || "Por revisar");
+      : categoryByName(db, req.body.categoryName || "General");
     if (!category) return res.status(400).json({ ok: false, error: "Carpeta invalida" });
     const now = new Date().toISOString();
     const link = {
@@ -1558,10 +1383,8 @@ app.patch("/api/links/:id", async (req, res) => {
     if (req.body.status !== undefined) link.status = String(req.body.status).trim();
     if (Array.isArray(req.body.tags)) link.tags = req.body.tags.map(String).slice(0, 20);
     if (req.body.archived !== undefined) {
-      link.archived = Boolean(req.body.archived);
-      link.archivedAt = link.archived ? new Date().toISOString() : "";
-      if (link.archived) link.status = "archivado";
-      else if (link.status === "archivado") link.status = "confirmado";
+      if (Boolean(req.body.archived)) markLinkDeleted(link);
+      else restoreDeletedLink(link);
     }
     if (req.body.categoryId !== undefined) {
       const category = db.categories.find((item) => item.id === req.body.categoryId);
@@ -1580,14 +1403,43 @@ app.patch("/api/links/:id", async (req, res) => {
   }
 });
 
+app.post("/api/links/bulk/delete", async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? new Set(req.body.ids.map(String)) : new Set();
+    if (ids.size === 0) return res.status(400).json({ ok: false, error: "Selecciona enlaces primero" });
+    const db = await readDatabase();
+    const now = new Date().toISOString();
+    const links = db.links
+      .filter((link) => ids.has(link.id))
+      .map((link) => markLinkDeleted(link, now));
+    await writeDatabase(db);
+    res.json({ ok: true, links, count: links.length });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/links/bulk/restore", async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? new Set(req.body.ids.map(String)) : new Set();
+    if (ids.size === 0) return res.status(400).json({ ok: false, error: "Selecciona enlaces primero" });
+    const db = await readDatabase();
+    const now = new Date().toISOString();
+    const links = db.links
+      .filter((link) => ids.has(link.id))
+      .map((link) => restoreDeletedLink(link, now));
+    await writeDatabase(db);
+    res.json({ ok: true, links, count: links.length });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.delete("/api/links/:id", async (req, res) => {
   const db = await readDatabase();
   const link = db.links.find((item) => item.id === req.params.id);
   if (!link) return res.status(404).json({ ok: false, error: "Enlace no encontrado" });
-  link.archived = true;
-  link.archivedAt = new Date().toISOString();
-  link.status = "archivado";
-  link.updatedAt = new Date().toISOString();
+  markLinkDeleted(link);
   await writeDatabase(db);
   res.json({ ok: true, archived: true, link });
 });
@@ -1596,83 +1448,9 @@ app.post("/api/links/:id/restore", async (req, res) => {
   const db = await readDatabase();
   const link = db.links.find((item) => item.id === req.params.id);
   if (!link) return res.status(404).json({ ok: false, error: "Enlace no encontrado" });
-  link.archived = false;
-  link.archivedAt = "";
-  if (link.status === "archivado") link.status = "confirmado";
-  link.updatedAt = new Date().toISOString();
+  restoreDeletedLink(link);
   await writeDatabase(db);
   res.json({ ok: true, restored: true, link });
-});
-
-app.post("/api/links/:id/classify", async (req, res) => {
-  try {
-    const db = await readDatabase();
-    const link = db.links.find((item) => item.id === req.params.id);
-    if (!link) return res.status(404).json({ ok: false, error: "Enlace no encontrado" });
-
-    const suggestion = classifyLink(link, db.categories);
-    const category = suggestion.categoryId
-      ? db.categories.find((item) => item.id === suggestion.categoryId)
-      : categoryByName(db, suggestion.categoryName || "Por revisar");
-
-    if (category && category.id !== link.categoryId) {
-      link.categoryId = category.id;
-      link.autoClassified = suggestion.method !== "fallback";
-      link.classificationMethod = suggestion.method;
-      link.confidence = suggestion.confidence;
-      if (suggestion.method !== "fallback") link.status = "auto-clasificado";
-      link.updatedAt = new Date().toISOString();
-      await writeDatabase(db);
-    }
-
-    res.json({ ok: true, link, category: category?.name || "", method: suggestion.method, confidence: suggestion.confidence });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-app.post("/api/classify/batch", async (req, res) => {
-  try {
-    const db = await readDatabase();
-    const limit = Math.max(1, Math.min(Number(req.body?.limit || 50), 200));
-    const candidates = db.links.filter((link) => {
-      if (link.archived) return false;
-      const category = db.categories.find((item) => item.id === link.categoryId);
-      return !category || category.name.toLowerCase() === "por revisar" || link.status === "pendiente";
-    }).slice(0, limit);
-
-    let moved = 0;
-    const details = [];
-    for (const link of candidates) {
-      const suggestion = classifyLink(link, db.categories);
-      if (suggestion.method === "fallback") {
-        details.push({ id: link.id, title: link.title, moved: false, reason: "sin coincidencia" });
-        continue;
-      }
-
-      const category = suggestion.categoryId
-        ? db.categories.find((item) => item.id === suggestion.categoryId)
-        : categoryByName(db, suggestion.categoryName);
-
-      if (category && category.id !== link.categoryId) {
-        link.categoryId = category.id;
-        link.autoClassified = true;
-        link.classificationMethod = suggestion.method;
-        link.confidence = suggestion.confidence;
-        link.status = "auto-clasificado";
-        link.updatedAt = new Date().toISOString();
-        moved += 1;
-        details.push({ id: link.id, title: link.title, moved: true, category: category.name, method: suggestion.method });
-      } else {
-        details.push({ id: link.id, title: link.title, moved: false, reason: "ya clasificado" });
-      }
-    }
-
-    if (moved > 0) await writeDatabase(db);
-    res.json({ ok: true, processed: candidates.length, moved, details });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
 });
 
 app.get("/api/backups", async (_req, res) => {
@@ -1742,6 +1520,7 @@ app.patch("/api/settings", async (req, res) => {
     contact: { ...db.settings.contact, ...(req.body.contact || {}) },
     storage: { ...db.settings.storage, ...(req.body.storage || {}) },
     sync: { ...db.settings.sync, ...(req.body.sync || {}) },
+    trash: { ...db.settings.trash, ...(req.body.trash || {}) },
     updates: { ...db.settings.updates, ...(req.body.updates || {}) }
   });
   await writeDatabase(db);
@@ -1752,10 +1531,6 @@ app.post("/api/sync/push", async (_req, res) => {
   try {
     const db = await readDatabase();
     const settings = db.settings.sync || {};
-    if (settings.mode === "googleDrive") {
-      const result = await uploadGoogleBackup(db);
-      return res.json(result);
-    }
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1781,12 +1556,6 @@ app.post("/api/sync/pull", async (_req, res) => {
   try {
     const db = await readDatabase();
     const settings = db.settings.sync || {};
-    if (settings.mode === "googleDrive") {
-      const remote = ensureDatabaseShape(await downloadGoogleBackup(db));
-      const merged = mergeRemoteDatabase(db, remote);
-      await writeDatabase(merged);
-      return res.json({ ok: true, provider: "googleDrive", categories: merged.categories.length, links: merged.links.length });
-    }
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1819,21 +1588,6 @@ app.post("/api/sync/auto", async (_req, res) => {
       return res.json({ ok: true, synced: false, reason: "Sin sincronización automática" });
     }
 
-    if (settings.mode === "googleDrive") {
-      try {
-        const remote = ensureDatabaseShape(await downloadGoogleBackup(db));
-        const merged = mergeRemoteDatabase(db, remote);
-        await writeDatabase(merged);
-        return res.json({ ok: true, synced: true, source: "googleDrive", categories: merged.categories.length, links: merged.links.length });
-      } catch (error) {
-        if (/No hay backup/.test(error.message)) {
-          await uploadGoogleBackup(db);
-          return res.json({ ok: true, synced: true, source: "googleDrive-created", categories: db.categories.length, links: db.links.length });
-        }
-        throw error;
-      }
-    }
-
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1863,97 +1617,6 @@ app.post("/api/sync/auto", async (_req, res) => {
     res.json({ ok: true, synced: true, source: "remote", categories: merged.categories.length, links: merged.links.length });
   } catch (error) {
     res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-async function findFileByExtension(dir, extension) {
-  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const found = await findFileByExtension(fullPath, extension);
-      if (found) return found;
-    } else if (entry.name.toLowerCase().endsWith(extension)) {
-      return fullPath;
-    }
-  }
-  return null;
-}
-
-function platformInstructions(platform) {
-  if (platform === "android") {
-    return {
-      name: "Linkoteca-Android-Instrucciones.txt",
-      body: [
-        "Linkoteca - Android",
-        "====================",
-        "",
-        "1. Instala Android Studio y JDK 21 LTS.",
-        "2. En la carpeta del proyecto ejecuta: npm run dist:android",
-        "3. El APK queda en android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
-        "4. En el celular, conecta la app a la IP del PC, por ejemplo http://192.168.1.50:4387"
-      ].join("\r\n")
-    };
-  }
-  if (platform === "ios") {
-    return {
-      name: "Linkoteca-iOS-Instrucciones.txt",
-      body: [
-        "Linkoteca - iOS",
-        "===============",
-        "",
-        "1. Se requiere macOS con Xcode.",
-        "2. Ejecuta: npx cap sync ios",
-        "3. Ejecuta: npx cap open ios",
-        "4. Compila desde Xcode y conecta la app a la IP del PC."
-      ].join("\r\n")
-    };
-  }
-  return {
-    name: "Linkoteca-PC-Instrucciones.txt",
-    body: [
-      "Linkoteca - Windows",
-      "===================",
-      "",
-      "1. En la carpeta del proyecto ejecuta: npm run dist:win",
-      "2. Los ejecutables quedan en dist\\",
-      `3. Usa Linkoteca Setup ${appVersion}.exe como instalador o Linkoteca ${appVersion}.exe como portable.`
-    ].join("\r\n")
-  };
-}
-
-app.get("/api/download/:platform", async (req, res) => {
-  try {
-    const db = await readDatabase();
-    const platform = String(req.params.platform || "pc").toLowerCase();
-    const updates = effectiveUpdates(db.settings.updates || {});
-
-    if (platform === "pc" || platform === "windows") {
-      const distDir = path.join(projectRoot, "dist");
-      const files = await fs.readdir(distDir).catch(() => []);
-      const setup = files.find((file) => /\.exe$/i.test(file) && /setup/i.test(file));
-      const portable = files.find((file) => /\.exe$/i.test(file));
-      const localFile = setup || portable;
-      if (localFile) return res.download(path.join(distDir, localFile));
-      if (updates.pcUrl) return res.redirect(updates.pcUrl);
-    }
-
-    if (platform === "android") {
-      const apk = await findFileByExtension(path.join(projectRoot, "android"), ".apk");
-      if (apk) return res.download(apk);
-      if (updates.androidUrl) return res.redirect(updates.androidUrl);
-    }
-
-    if (platform === "ios") {
-      if (updates.iosUrl) return res.redirect(updates.iosUrl);
-    }
-
-    const instructions = platformInstructions(platform);
-    res.setHeader("content-disposition", `attachment; filename="${instructions.name}"`);
-    res.setHeader("content-type", "text/plain; charset=utf-8");
-    res.send(instructions.body);
-  } catch (error) {
-    res.status(500).send(`Error al preparar descarga: ${error.message}`);
   }
 });
 

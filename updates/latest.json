@@ -1,11 +1,9 @@
 {
-  "version": "0.3.0-beta.1",
+  "version": "0.3.0-beta.2",
   "channel": "beta",
-  "notes": "Primera beta distribuible de Linkoteca con escritorio, Android, actualizaciones y base de backup con Google Drive.",
+  "notes": "Beta Windows de Linkoteca con instalador, icono personalizado, papelera, exportacion, sincronizacion por red y vistas previas sociales mejoradas.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/linkoteca-beta/releases/download/v0.3.0-beta.1/Linkoteca-Windows-Setup.exe",
-    "windowsPortable": "https://github.com/colombianitov2/linkoteca-beta/releases/download/v0.3.0-beta.1/Linkoteca-Windows-Portable.exe",
-    "android": "https://github.com/colombianitov2/linkoteca-beta/releases/download/v0.3.0-beta.1/Linkoteca-Android-debug.apk",
-    "macos": "https://github.com/colombianitov2/linkoteca-beta/releases/download/v0.3.0-beta.1/Linkoteca-macOS.dmg"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.2/Linkoteca-Windows-Setup.exe",
+    "windowsPortable": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.2/Linkoteca-Windows-Portable.exe"
   }
 }

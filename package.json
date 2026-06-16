@@ -1,6 +1,6 @@
 {
   "name": "linkoteca",
-  "version": "0.3.0-beta.1",
+  "version": "0.3.0-beta.2",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -8,7 +8,7 @@
   "author": "Ernesto Pernett",
   "repository": {
     "type": "git",
-    "url": "https://github.com/colombianitov2/linkoteca-beta.git"
+    "url": "https://github.com/colombianitov2/Linkoteca.git"
   },
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-linkoteca.ps1",
@@ -33,17 +33,19 @@
     "@capacitor/android": "^8.3.4",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/ios": "^8.3.4",
-    "electron": "^42.3.0",
+    "electron": "42.3.0",
     "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "com.wolframica.linkoteca",
     "productName": "Linkoteca",
     "asar": false,
+    "icon": "build/icon.ico",
     "directories": {
       "output": "dist"
     },
     "files": [
+      "build/**/*",
       "electron/**/*",
       "src/**/*",
       "public/**/*",
@@ -53,6 +55,7 @@
       "README.md"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
@@ -77,6 +80,9 @@
       "category": "public.app-category.productivity"
     },
     "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
