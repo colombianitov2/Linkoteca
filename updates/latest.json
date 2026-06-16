@@ -1,9 +1,9 @@
 {
-  "version": "0.3.0-beta.2",
+  "version": "0.3.0-beta.3",
   "channel": "beta",
-  "notes": "Beta Windows de Linkoteca con instalador, icono personalizado, papelera, exportacion, sincronizacion por red y vistas previas sociales mejoradas.",
+  "notes": "Beta Windows de Linkoteca con instalador, icono personalizado, papelera, exportacion, vistas previas sociales mejoradas y confirmaciones visibles sobre Configuracion.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.2/Linkoteca-Windows-Setup.exe",
-    "windowsPortable": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.2/Linkoteca-Windows-Portable.exe"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.3/Linkoteca-Windows-Setup.exe",
+    "windowsPortable": "https://github.com/colombianitov2/Linkoteca/releases/download/v0.3.0-beta.3/Linkoteca-Windows-Portable.exe"
   }
 }

@@ -766,6 +766,7 @@ textarea {
 }
 
 .dialog {
+  position: relative;
   width: min(92vw, 480px);
   border: 0;
   border-radius: 8px;
@@ -1000,12 +1001,16 @@ textarea {
 
 .toast {
   position: fixed;
+  inset: auto auto 18px 50%;
   left: 50%;
   bottom: 18px;
   z-index: 20;
+  width: max-content;
+  max-width: min(90vw, 540px);
   min-height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
+  margin: 0;
   padding: 10px 14px;
   color: #fff;
   background: #111;
@@ -1019,6 +1024,12 @@ textarea {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.dialog > .toast {
+  position: absolute;
+  bottom: 18px;
+  z-index: 1000;
 }
 
 @media (max-width: 980px) {

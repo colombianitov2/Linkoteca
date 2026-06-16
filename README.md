@@ -4,7 +4,7 @@ App de escritorio Windows para organizar enlaces como una galeria visual por car
 
 ## Estado beta
 
-- Version: `0.3.0-beta.2`.
+- Version: `0.3.0-beta.3`.
 - Repositorio: `https://github.com/colombianitov2/Linkoteca`.
 - La beta nueva arranca vacia: sin enlaces, sin carpetas y sin datos personales preinstalados.
 - Las carpetas se crean solo cuando el usuario agrega, comparte o importa enlaces.
@@ -48,7 +48,7 @@ http://localhost:4387
 
 - Windows: `npm run dist:win`
 
-El repo publica artefactos Windows al crear un tag como `v0.3.0-beta.2`:
+El repo publica artefactos Windows al crear un tag como `v0.3.0-beta.3`:
 
 - `Linkoteca-Windows-Setup.exe`
 - `Linkoteca-Windows-Portable.exe`

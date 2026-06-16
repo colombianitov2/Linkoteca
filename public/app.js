@@ -358,10 +358,22 @@ function icon(name, extraStyles = "") {
 }
 
 function toast(message) {
-  els.toast.textContent = message;
-  els.toast.classList.add("show");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => els.toast.classList.remove("show"), 2200);
+  clearTimeout(toast.hideTimer);
+  const openDialogs = [...document.querySelectorAll("dialog[open]")];
+  const toastHost = openDialogs.at(-1) || document.body;
+  if (els.toast.parentElement !== toastHost) toastHost.appendChild(els.toast);
+
+  els.toast.textContent = message;
+  els.toast.classList.remove("show");
+
+  requestAnimationFrame(() => els.toast.classList.add("show"));
+  toast.timer = setTimeout(() => {
+    els.toast.classList.remove("show");
+    toast.hideTimer = setTimeout(() => {
+      if (els.toast.parentElement !== document.body) document.body.appendChild(els.toast);
+    }, 180);
+  }, 2200);
 }
 
 function updateLocalLink(updatedLink) {
