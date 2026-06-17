@@ -1,4 +1,4 @@
-name: Beta release
+name: Windows release
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
           path: release/*
 
   release:
-    name: Publish GitHub beta release
+    name: Publish GitHub release
     needs: [windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -48,6 +48,13 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
+          name: Linkoteca Windows ${{ github.ref_name }}
+          body: |
+            Linkoteca para Windows.
+
+            Descarga `Linkoteca-Windows-Setup.exe` para instalar la app en el PC.
+            También se incluye `Linkoteca-Windows-Portable.exe` para abrirla sin instalador.
+          prerelease: false
+          make_latest: true
           overwrite_files: true
           files: release/*

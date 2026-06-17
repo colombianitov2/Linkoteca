@@ -16,16 +16,18 @@ const backupDir = path.join(dataDir, "backups");
 const dbPath = path.join(dataDir, "linkoteca.json");
 const bundledDbPath = path.join(projectRoot, "data", "linkoteca.json");
 const publicDir = path.join(projectRoot, "public");
-const defaultExcelPath = "C:\\Users\\erpec\\Desktop\\Links.xlsx";
+const userHome = process.env.USERPROFILE || process.env.HOME || writableRoot;
+const defaultExcelPath = path.join(userHome, "Desktop", "Links.xlsx");
 const port = Number(process.env.PORT || 4387);
 const appUrl = `http://localhost:${port}`;
-const appVersion = "0.3.0-beta.3";
+const appVersion = "1.0.0";
 const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/Linkoteca/main/updates/latest.json";
 
-const blockedRoots = [
-  path.resolve("D:\\Nube"),
-  path.resolve("D:\\Nube\\Fotos y videos")
-];
+const blockedRoots = String(process.env.LINKOTECA_BLOCKED_ROOTS || "")
+  .split(";")
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => path.resolve(item));
 
 const defaultExportDir = path.join(writableRoot, "exports");
 
