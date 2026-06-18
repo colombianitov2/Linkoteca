@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111111">
     <title>Linkoteca</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=22">
-    <link rel="stylesheet" href="/styles.css?v=22">
+    <link rel="manifest" href="/manifest.webmanifest?v=19">
+    <link rel="stylesheet" href="/styles.css?v=19">
   </head>
   <body>
     <div class="app-shell">
@@ -34,6 +34,14 @@
           </button>
         </div>
 
+        <div class="folder-heading group-heading">
+          <span>Grupos</span>
+          <button id="newGroupButton" class="icon-button" type="button" title="Nuevo grupo" aria-label="Nuevo grupo">
+            <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
+          </button>
+        </div>
+        <nav id="groupList" class="group-list" aria-label="Grupos de carpetas"></nav>
+
         <div class="folder-heading">
           <span>Carpetas</span>
           <button id="newCategoryButton" class="icon-button" type="button" title="Nueva carpeta" aria-label="Nueva carpeta">
@@ -45,10 +53,6 @@
           <input id="folderSearchInput" class="folder-search" type="search" placeholder="Filtrar carpetas" autocomplete="off">
         </label>
         <nav id="categoryList" class="category-list" aria-label="Carpetas"></nav>
-        <button id="toggleFoldersButton" class="toggle-folders-button" type="button" hidden>
-          <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
-          <span>Mostrar todas</span>
-        </button>
       </aside>
 
       <main class="main">
@@ -57,6 +61,10 @@
             <span class="eyebrow"><span class="icon" style="--icon: url('/icons/sparkles.svg')"></span> Colección personal</span>
             <h1 id="activeTitle">Todos</h1>
             <p id="libraryStats">Cargando...</p>
+            <label id="allDateFilterWrap" class="all-date-filter-wrap">
+              <span>Mostrar</span>
+              <select id="allDateFilter" aria-label="Periodo de enlaces sin carpeta"></select>
+            </label>
           </div>
           <div class="toolbar">
             <label class="search-wrap">
@@ -84,24 +92,6 @@
               Agregar
             </button>
           </form>
-        </section>
-
-        <section id="bulkActions" class="bulk-actions" aria-live="polite" hidden>
-          <strong id="bulkSelectionText">0 seleccionados</strong>
-          <div class="bulk-buttons">
-            <button id="bulkDeleteButton" class="danger-button" type="button">
-              <span class="icon" style="--icon: url('/icons/trash.svg')"></span>
-              Eliminar seleccionados
-            </button>
-            <button id="bulkRestoreButton" class="restore-button" type="button">
-              <span class="icon" style="--icon: url('/icons/check.svg')"></span>
-              Restaurar seleccionados
-            </button>
-            <button id="clearSelectionButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/x.svg')"></span>
-              Limpiar selección
-            </button>
-          </div>
         </section>
 
         <section id="gallery" class="gallery" aria-live="polite"></section>
@@ -134,7 +124,7 @@
         <div id="detailPreview" class="detail-preview"></div>
         <div class="detail-content">
           <div class="detail-header">
-            <h2>Detalle del enlace</h2>
+          <h2>Detalle del enlace</h2>
             <button value="cancel" class="icon-button ghost-button" type="submit" aria-label="Cerrar">
               <span class="icon" style="--icon: url('/icons/x.svg')"></span>
             </button>
@@ -164,9 +154,13 @@
               <span class="icon" style="--icon: url('/icons/copy.svg')"></span>
               Copiar
             </button>
+            <button id="detailSaveButton" type="button">
+              <span class="icon" style="--icon: url('/icons/check.svg')"></span>
+              Guardar
+            </button>
             <button id="detailDeleteButton" class="danger-button" type="button">
-              <span class="icon" style="--icon: url('/icons/trash.svg')"></span>
-              Eliminar
+              <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+              Borrar
             </button>
           </div>
         </div>
@@ -175,10 +169,14 @@
 
     <dialog id="categoryDialog" class="dialog">
       <form method="dialog" class="dialog-panel">
-        <h2>Nueva carpeta</h2>
+        <h2 id="categoryDialogTitle">Nueva carpeta</h2>
         <label>
           Nombre
           <input id="categoryNameInput" type="text" maxlength="120" autocomplete="off">
+        </label>
+        <label>
+          Grupo
+          <select id="categoryGroupInput"></select>
         </label>
         <div class="dialog-actions">
           <button value="cancel" class="ghost-button" type="submit">
@@ -187,24 +185,27 @@
           </button>
           <button id="confirmCategoryButton" type="button">
             <span class="icon" style="--icon: url('/icons/folder.svg')"></span>
-            Crear
+            <span id="confirmCategoryLabel">Crear</span>
           </button>
         </div>
       </form>
     </dialog>
 
-    <dialog id="confirmDialog" class="dialog confirm-dialog">
+    <dialog id="groupDialog" class="dialog">
       <form method="dialog" class="dialog-panel">
-        <h2>Confirmar acción</h2>
-        <p id="confirmMessage" class="dialog-copy">¿Está seguro?</p>
+        <h2 id="groupDialogTitle">Nuevo grupo</h2>
+        <label>
+          Nombre
+          <input id="groupNameInput" type="text" maxlength="120" autocomplete="off">
+        </label>
         <div class="dialog-actions">
-          <button id="confirmNoButton" class="ghost-button" value="cancel" type="button">
+          <button value="cancel" class="ghost-button" type="submit">
             <span class="icon" style="--icon: url('/icons/x.svg')"></span>
-            No
+            Cancelar
           </button>
-          <button id="confirmYesButton" class="danger-button" value="default" type="button">
+          <button id="confirmGroupButton" type="button">
             <span class="icon" style="--icon: url('/icons/check.svg')"></span>
-            Sí
+            <span id="confirmGroupLabel">Crear</span>
           </button>
         </div>
       </form>
@@ -237,105 +238,54 @@
         </section>
 
         <section class="settings-section">
-          <h3>Contacto y versiones</h3>
-          <label>
-            Versión instalada
-            <input id="installedVersionInput" type="text" readonly>
-          </label>
+          <h3>Perfil del desarrollador</h3>
+          <a class="ghost-button github-profile-button" href="https://github.com/colombianitov2" target="_blank" rel="noopener noreferrer">
+            <span class="icon" style="--icon: url('/icons/github.svg')"></span>
+            Abrir perfil de GitHub
+          </a>
+        </section>
+
+        <section class="settings-section">
+          <h3>Versión</h3>
           <div class="dialog-actions inline-actions">
-            <button id="githubProfileButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/github.svg')"></span>
-              Perfil de GitHub
-            </button>
             <button id="checkVersionButton" class="ghost-button" type="button">
               <span class="icon" style="--icon: url('/icons/refresh-cw.svg')"></span>
-              Verificar versión
+              <span id="versionButtonLabel">Verificar versión</span>
+            </button>
+          </div>
+          <div id="versionStatusPanel" class="version-status-panel" role="status" aria-live="polite" hidden>
+            <strong id="versionStatusTitle"></strong>
+            <p id="versionStatusDetails"></p>
+            <p id="versionReleaseNotes" class="settings-note" hidden></p>
+            <button id="downloadUpdateButton" class="primary-button" type="button" hidden>
+              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
+              Descargar actualización
             </button>
           </div>
         </section>
 
         <section class="settings-section">
-          <h3>Almacenamiento y exportación</h3>
+          <h3>Exportar e importar</h3>
           <label>
-            Carpeta local de almacenamiento
-            <input id="storagePathInput" type="text" placeholder="C:\Users\...\Documents\Linkoteca\exports">
-          </label>
-          <label>
-            Formato principal para guardar en carpeta
-            <select id="storageFormatInput">
-              <option value="json">JSON recomendado</option>
-              <option value="xls">Excel compatible</option>
-              <option value="csv">CSV para Excel</option>
-              <option value="txt">TXT simple</option>
+            Formato
+            <select id="dataFormatInput">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+              <option value="txt">TXT</option>
+              <option value="xls">Excel (.xls)</option>
             </select>
           </label>
           <div class="dialog-actions inline-actions">
-            <button id="chooseStorageFolderButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/folder-open.svg')"></span>
-              Elegir carpeta
-            </button>
-            <button id="downloadDataButton" class="ghost-button" type="button">
+            <button id="exportDataButton" class="ghost-button" type="button">
               <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
-              Descargar archivo
+              Exportar
             </button>
-            <button id="exportLocalButton" class="ghost-button" type="button">
+            <button id="importDataButton" class="ghost-button" type="button">
               <span class="icon" style="--icon: url('/icons/upload-cloud.svg')"></span>
-              Guardar en carpeta
+              Importar
             </button>
-            <button id="exportDesktopButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/folder-open.svg')"></span>
-              Galería en Escritorio
-            </button>
+            <input id="importFileInput" type="file" hidden>
           </div>
-        </section>
-
-        <section class="settings-section">
-          <h3>Nube y sincronización</h3>
-          <label>
-            Proveedor
-            <select id="syncModeInput">
-              <option value="none">Sin sincronización</option>
-              <option value="webdav">Nextcloud WebDAV</option>
-              <option value="ip">IP / servidor propio</option>
-            </select>
-          </label>
-          <label>
-            URL / servidor propio o ruta de red
-            <input id="remoteUrlInput" type="text" placeholder="http://192.168.1.50:8080/linkoteca.json o P:\Linkoteca">
-          </label>
-          <label>
-            URL Nextcloud WebDAV
-            <input id="webdavUrlInput" type="url" placeholder="https://cloud.example.com/remote.php/dav/files/usuario/linkoteca.json">
-          </label>
-          <p class="settings-note">Para usar la unidad de red, elige IP / servidor propio y pega una ruta como P:\Linkoteca o \\100.75.146.94\HDD_PROGRAMAS\Linkoteca.</p>
-          <label class="checkbox-row">
-            <input id="autoSyncInput" type="checkbox">
-            <span>Sincronizar automáticamente al abrir la app</span>
-          </label>
-          <div class="dialog-actions inline-actions">
-            <button id="pullSyncButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
-              Descargar nube
-            </button>
-            <button id="pushSyncButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/upload-cloud.svg')"></span>
-              Subir nube
-            </button>
-          </div>
-        </section>
-
-        <section class="settings-section">
-          <h3>Papelera</h3>
-          <label>
-            Borrar automáticamente después de
-            <select id="trashRetentionDaysInput">
-              <option value="5">5 días</option>
-              <option value="10">10 días</option>
-              <option value="15">15 días</option>
-              <option value="30">30 días</option>
-            </select>
-          </label>
-          <p class="settings-note">Los enlaces eliminados se pueden restaurar desde Papelera antes de que se cumpla este plazo.</p>
         </section>
 
         <section class="settings-section">
@@ -344,9 +294,7 @@
             <li>Pega un enlace, elige carpeta y pulsa Agregar.</li>
             <li>Haz clic en una tarjeta o en Editar para corregir título, descripción o carpeta.</li>
             <li>Usa Copiar para compartir el enlace original.</li>
-            <li>Selecciona varios enlaces para eliminarlos o restaurarlos en grupo desde Papelera.</li>
-            <li>En Android, usa Compartir desde otra app y elige Linkoteca para guardar el enlace.</li>
-            <li>Configura Nextcloud o IP / servidor propio para sincronizar el banco de enlaces.</li>
+            <li>Usa Exportar para respaldar e Importar para recuperar tus enlaces.</li>
           </ol>
         </section>
 
@@ -362,12 +310,16 @@
     <dialog id="connectionDialog" class="dialog connection-dialog">
       <form method="dialog" class="dialog-panel">
         <h2>Conectar Linkoteca</h2>
-        <p class="dialog-copy">Para usar la app desde celular, abre Linkoteca en el PC y escribe la IP del servidor local.</p>
+        <p class="dialog-copy">Selecciona este equipo o escribe la URL del servidor de Linkoteca.</p>
         <label>
           Servidor
           <input id="apiBaseInput" type="url" placeholder="http://192.168.1.50:4387">
         </label>
         <div class="dialog-actions">
+          <button value="cancel" class="ghost-button" type="submit">
+            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+            Cancelar
+          </button>
           <button id="useLocalApiButton" class="ghost-button" type="button">
             <span class="icon" style="--icon: url('/icons/library.svg')"></span>
             Usar este equipo
@@ -382,6 +334,6 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script src="/app.js?v=23" type="module"></script>
+    <script src="/app.js?v=19" type="module"></script>
   </body>
 </html>

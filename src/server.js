@@ -16,18 +16,16 @@ const backupDir = path.join(dataDir, "backups");
 const dbPath = path.join(dataDir, "linkoteca.json");
 const bundledDbPath = path.join(projectRoot, "data", "linkoteca.json");
 const publicDir = path.join(projectRoot, "public");
-const userHome = process.env.USERPROFILE || process.env.HOME || writableRoot;
-const defaultExcelPath = path.join(userHome, "Desktop", "Links.xlsx");
 const port = Number(process.env.PORT || 4387);
 const appUrl = `http://localhost:${port}`;
-const appVersion = "1.0.0";
-const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/Linkoteca/main/updates/latest.json";
+const appVersion = "0.3.0-beta.2";
+const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/linkoteca-beta/main/updates/latest.json";
+const developerProfileUrl = "https://github.com/colombianitov2";
 
-const blockedRoots = String(process.env.LINKOTECA_BLOCKED_ROOTS || "")
-  .split(";")
-  .map((item) => item.trim())
-  .filter(Boolean)
-  .map((item) => path.resolve(item));
+const blockedRoots = [
+  path.resolve(projectRoot, "Nube"),
+  path.resolve(projectRoot, "Nube", "Fotos y videos")
+];
 
 const defaultExportDir = path.join(writableRoot, "exports");
 
@@ -64,24 +62,11 @@ function defaultSettings() {
     contact: {
       ownerName: "Ernesto Pernett",
       ownerTitle: "Ingeniero Mecánico",
-      supportEmail: "epernett1020@hotmail.com"
+      githubProfileUrl: developerProfileUrl
     },
     storage: {
       path: defaultExportDir,
       format: "json"
-    },
-    sync: {
-      mode: "none",
-      provider: "none",
-      autoOnOpen: true,
-      remoteUrl: "",
-      webdavUrl: "",
-      folderPath: "",
-      username: "",
-      password: ""
-    },
-    trash: {
-      retentionDays: 30
     },
     updates: {
       latestVersionUrl
@@ -91,48 +76,84 @@ function defaultSettings() {
 
 function mergeSettings(settings = {}) {
   const defaults = defaultSettings();
-  const updates = {
-    latestVersionUrl: settings.updates?.latestVersionUrl || defaults.updates.latestVersionUrl
-  };
-  const rawSync = { ...defaults.sync, ...(settings.sync || {}) };
-  const allowedModes = new Set(["none", "webdav", "ip"]);
-  const mode = allowedModes.has(rawSync.mode) ? rawSync.mode : "none";
-  const retentionDays = [5, 10, 15, 30].includes(Number(settings.trash?.retentionDays))
-    ? Number(settings.trash.retentionDays)
-    : defaults.trash.retentionDays;
-  for (const key of Object.keys(defaults.updates)) {
-    if (!updates[key]) updates[key] = defaults.updates[key];
-  }
   return {
-    ...defaults,
-    ...settings,
-    contact: { ...defaults.contact, supportEmail: "epernett1020@hotmail.com" },
-    storage: { ...defaults.storage, ...(settings.storage || {}) },
-    sync: {
-      ...defaults.sync,
-      mode,
-      provider: mode,
-      autoOnOpen: rawSync.autoOnOpen !== false,
-      remoteUrl: String(rawSync.remoteUrl || "").trim(),
-      webdavUrl: String(rawSync.webdavUrl || "").trim(),
-      folderPath: String(rawSync.folderPath || "").trim(),
-      username: "",
-      password: ""
+    contact: {
+      ...defaults.contact,
+      githubProfileUrl: settings.contact?.githubProfileUrl || defaults.contact.githubProfileUrl
     },
-    trash: { retentionDays },
-    updates
+    storage: {
+      ...defaults.storage,
+      path: String(settings.storage?.path || defaults.storage.path),
+      format: ["json", "csv", "txt", "xls"].includes(settings.storage?.format)
+        ? settings.storage.format
+        : defaults.storage.format
+    },
+    updates: {
+      latestVersionUrl: defaults.updates.latestVersionUrl
+    }
   };
+}
+
+function parseVersion(value) {
+  const match = String(value || "").trim().replace(/^v/i, "").match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ? match[4].split(".") : []
+  };
+}
+
+function compareVersionParts(left, right) {
+  const leftVersion = parseVersion(left);
+  const rightVersion = parseVersion(right);
+  if (!leftVersion || !rightVersion) {
+    if (String(left) === String(right)) return 0;
+    return NaN;
+  }
+  for (const key of ["major", "minor", "patch"]) {
+    if (leftVersion[key] !== rightVersion[key]) return leftVersion[key] > rightVersion[key] ? 1 : -1;
+  }
+  if (!leftVersion.prerelease.length && rightVersion.prerelease.length) return 1;
+  if (leftVersion.prerelease.length && !rightVersion.prerelease.length) return -1;
+  const length = Math.max(leftVersion.prerelease.length, rightVersion.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = leftVersion.prerelease[index];
+    const rightPart = rightVersion.prerelease[index];
+    if (leftPart === undefined) return -1;
+    if (rightPart === undefined) return 1;
+    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : null;
+    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : null;
+    if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) {
+      return leftNumber > rightNumber ? 1 : -1;
+    }
+    if (leftNumber !== null && rightNumber === null) return -1;
+    if (leftNumber === null && rightNumber !== null) return 1;
+    if (leftPart !== rightPart) return leftPart > rightPart ? 1 : -1;
+  }
+  return 0;
 }
 
 function ensureDatabaseShape(db) {
   db.version = db.version || 1;
+  db.sourceFile = db.sourceFile || "";
+  db.groups = Array.isArray(db.groups) ? db.groups : [];
   db.categories = Array.isArray(db.categories) ? db.categories : [];
   db.links = Array.isArray(db.links) ? db.links : [];
+  for (const group of db.groups) {
+    group.archived = Boolean(group.archived);
+    group.archivedAt = group.archived ? String(group.archivedAt || "") : "";
+  }
+  const groupIds = new Set(db.groups.map((group) => group.id));
+  for (const category of db.categories) {
+    category.groupId = groupIds.has(category.groupId) ? category.groupId : null;
+    category.archived = Boolean(category.archived);
+    category.archivedAt = category.archived ? String(category.archivedAt || "") : "";
+  }
   for (const link of db.links) {
-    if (link.status === ["auto", "clasificado"].join("-")) link.status = "confirmado";
-    if (link.archived && link.status === "archivado") link.status = "eliminado";
-    delete link[["auto", "Classified"].join("")];
-    delete link.classificationMethod;
+    link.archived = Boolean(link.archived);
+    link.archivedAt = link.archived ? String(link.archivedAt || "") : "";
   }
   db.settings = mergeSettings(db.settings);
   db.safety = {
@@ -199,23 +220,6 @@ function thumbnailFromUrl(url) {
   const youtubeId = getYouTubeId(url);
   if (youtubeId) return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   return "";
-}
-
-function isInstagramUrl(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "").toLowerCase().includes("instagram.com");
-  } catch {
-    return false;
-  }
-}
-
-function isFacebookUrl(url) {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    return host.includes("facebook.com") || host.includes("fb.watch");
-  } catch {
-    return false;
-  }
 }
 
 function decodeHtmlEntities(value) {
@@ -305,7 +309,8 @@ function emptyDatabase() {
     version: 1,
     createdAt: now,
     updatedAt: now,
-    sourceExcel: defaultExcelPath,
+    sourceFile: "",
+    groups: [],
     categories: [],
     links: [],
     settings: defaultSettings(),
@@ -344,64 +349,6 @@ async function writeDatabase(db) {
   const nextRaw = `${JSON.stringify(db, null, 2)}\n`;
   await backupDatabaseIfChanged(nextRaw);
   await fs.writeFile(dbPath, nextRaw, "utf8");
-}
-
-async function fetchInstagramOEmbedPreview(url) {
-  if (!isInstagramUrl(url)) return null;
-  const endpoint = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
-  try {
-    const response = await fetch(endpoint, { signal: controller.signal });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return {
-      title: cleanPreviewText(data.title || data.author_name || "Publicación de Instagram"),
-      description: data.author_name ? `Instagram: ${data.author_name}` : "Vista previa de Instagram",
-      thumbnail: "",
-      platform: "Instagram"
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function previewUserAgentsForUrl(url) {
-  if (isInstagramUrl(url)) {
-    return [
-      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
-      "WhatsApp/2.23.20.0 A",
-      "Twitterbot/1.0",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
-    ];
-  }
-  if (isFacebookUrl(url)) {
-    return [
-      "WhatsApp/2.23.20.0 A",
-      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
-    ];
-  }
-  return [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
-  ];
-}
-
-function pruneExpiredTrash(db) {
-  const retentionDays = [5, 10, 15, 30].includes(Number(db.settings?.trash?.retentionDays))
-    ? Number(db.settings.trash.retentionDays)
-    : 30;
-  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-  const before = db.links.length;
-  db.links = db.links.filter((link) => {
-    if (!link.archived || !link.archivedAt) return true;
-    const archivedAt = new Date(link.archivedAt).getTime();
-    if (!Number.isFinite(archivedAt)) return true;
-    return archivedAt >= cutoff;
-  });
-  return before - db.links.length;
 }
 
 async function backupDatabaseIfChanged(nextRaw) {
@@ -445,15 +392,19 @@ async function seedFromBundledDatabaseIfNeeded() {
   }
 }
 
-function categoryByName(db, name) {
+function categoryByName(db, name, groupId = undefined) {
   const cleanName = String(name || "Sin clasificar").trim() || "Sin clasificar";
-  const found = db.categories.find((category) => category.name.toLowerCase() === cleanName.toLowerCase());
-  if (found) return found;
+  const found = db.categories.find((category) => !category.archived && category.name.toLowerCase() === cleanName.toLowerCase());
+  if (found) {
+    if (groupId !== undefined) found.groupId = groupId || null;
+    return found;
+  }
   const category = {
     id: idFrom("category", cleanName),
     name: cleanName,
     slug: slugify(cleanName),
     parentId: null,
+    groupId: groupId || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     source: "manual"
@@ -462,7 +413,7 @@ function categoryByName(db, name) {
   return category;
 }
 
-async function seedFromExcelIfNeeded() {
+async function initializeDatabaseIfNeeded() {
   try {
     await fs.access(dbPath);
   } catch {
@@ -488,32 +439,34 @@ function safeLinkPayload(body) {
   };
 }
 
-function markLinkDeleted(link, now = new Date().toISOString()) {
-  link.archived = true;
-  link.archivedAt = now;
-  link.status = "eliminado";
-  link.updatedAt = now;
-  return link;
-}
-
-function restoreDeletedLink(link, now = new Date().toISOString()) {
-  link.archived = false;
-  link.archivedAt = "";
-  if (link.status === "archivado" || link.status === "eliminado") link.status = "confirmado";
-  link.updatedAt = now;
-  return link;
-}
-
 function mergeRemoteDatabase(local, remote) {
   const merged = structuredClone(local);
+  const groups = new Map(merged.groups.map((group) => [group.id, group]));
   const categories = new Map(merged.categories.map((category) => [category.id, category]));
   const links = new Map(merged.links.map((link) => [link.id, link]));
 
+  for (const group of remote.groups || []) {
+    const localGroup = groups.get(group.id);
+    if (!localGroup) {
+      merged.groups.push(group);
+      groups.set(group.id, group);
+      continue;
+    }
+    const localDate = new Date(localGroup.updatedAt || 0).getTime();
+    const remoteDate = new Date(group.updatedAt || 0).getTime();
+    if (remoteDate > localDate) Object.assign(localGroup, group);
+  }
+
   for (const category of remote.categories || []) {
-    if (!categories.has(category.id)) {
+    const localCategory = categories.get(category.id);
+    if (!localCategory) {
       merged.categories.push(category);
       categories.set(category.id, category);
+      continue;
     }
+    const localDate = new Date(localCategory.updatedAt || 0).getTime();
+    const remoteDate = new Date(category.updatedAt || 0).getTime();
+    if (remoteDate > localDate) Object.assign(localCategory, category);
   }
 
   for (const remoteLink of remote.links || []) {
@@ -543,57 +496,36 @@ function faviconFallback(url) {
 async function fetchPreview(url) {
   const youtubePreview = await fetchYouTubePreview(url);
   if (youtubePreview) return youtubePreview;
-  const instagramOEmbedPreview = await fetchInstagramOEmbedPreview(url);
 
   const base = {
-    title: instagramOEmbedPreview?.title || "",
-    description: instagramOEmbedPreview?.description || "",
+    title: "",
+    description: "",
     thumbnail: thumbnailFromUrl(url),
-    platform: instagramOEmbedPreview?.platform || detectPlatform(url)
+    platform: detectPlatform(url)
   };
-  for (const userAgent of previewUserAgentsForUrl(url)) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "accept-language": "es-ES,es;q=0.9,en;q=0.8",
-          "user-agent": userAgent
-        }
-      });
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("text/html")) continue;
-      const html = await response.text();
-      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = cleanPreviewText(pickMeta(html, ["og:title", "twitter:title"]) || titleMatch?.[1] || "");
-      const description = cleanPreviewText(pickMeta(html, ["og:description", "twitter:description", "description"]));
-      const image = absolutizeUrl(pickMeta(html, ["og:image", "twitter:image", "twitter:image:src", "image"]), url);
-      const platform = isInstagramUrl(url)
-        ? "Instagram"
-        : isFacebookUrl(url)
-          ? "Facebook"
-          : cleanPreviewText(pickMeta(html, ["og:site_name", "twitter:site"]) || detectPlatform(url));
-      if (title && !/^instagram$/i.test(title)) base.title = title;
-      if (description) base.description = description;
-      if (image) base.thumbnail = image;
-      if (platform) base.platform = platform;
-      if (base.title && base.thumbnail) break;
-    } catch {
-      // Sigue probando otros agentes de vista previa.
-    } finally {
-      clearTimeout(timeout);
-    }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "user-agent": "Linkoteca/0.2 (+local preview fetcher)"
+      }
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) return base;
+    const html = await response.text();
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    base.title = cleanPreviewText(pickMeta(html, ["og:title", "twitter:title"]) || titleMatch?.[1] || "");
+    base.description = cleanPreviewText(pickMeta(html, ["og:description", "twitter:description", "description"]));
+    base.thumbnail = base.thumbnail || absolutizeUrl(pickMeta(html, ["og:image", "twitter:image", "image"]), url);
+  } catch {
+    // Mantiene la base y usa favicon como miniatura si no hubo OpenGraph.
+  } finally {
+    clearTimeout(timeout);
   }
   if (!base.thumbnail) base.thumbnail = faviconFallback(url);
   return base;
-}
-
-function shouldApplyPreviewTitle(link, preview) {
-  if (!preview.title) return false;
-  const title = String(link.title || "").trim().toLowerCase();
-  return !title || title === "enlace sin titulo" || title === hostFromUrlSafe(link.url);
 }
 
 function hostFromUrlSafe(url) {
@@ -604,124 +536,215 @@ function hostFromUrlSafe(url) {
   }
 }
 
-function applyPreviewToLink(link, preview) {
-  let changed = false;
-  if (shouldApplyPreviewTitle(link, preview)) {
-    link.title = cleanPreviewText(preview.title).slice(0, 180);
-    changed = true;
-  }
-  const description = cleanPreviewText(preview.description);
-  if ((!link.description || /^<|^meta\s/i.test(link.description)) && description) {
-    link.description = description.slice(0, 1200);
-    changed = true;
-  }
-  if (!link.thumbnail && preview.thumbnail) {
-    link.thumbnail = preview.thumbnail;
-    changed = true;
-  }
-  if (preview.platform && preview.platform !== link.platform) {
-    link.platform = preview.platform;
-    changed = true;
-  }
-  if (changed) link.updatedAt = new Date().toISOString();
-  return changed;
-}
-
-function sanitizeLinkPreviewFields(link) {
-  let changed = false;
-  if (link.description) {
-    const cleaned = cleanPreviewText(link.description);
-    if (cleaned !== link.description) {
-      link.description = cleaned;
-      changed = true;
-    }
-  }
-  if (link.title) {
-    const cleaned = cleanPreviewText(link.title);
-    if (cleaned && cleaned !== link.title) {
-      link.title = cleaned.slice(0, 180);
-      changed = true;
-    }
-  }
-  if (changed) link.updatedAt = new Date().toISOString();
-  return changed;
-}
-
 function syncHeaders(settings) {
-  return { "content-type": "application/json" };
-}
-
-function looksLikeFilePath(value) {
-  const text = String(value || "").trim();
-  return /^[a-zA-Z]:[\\/]/.test(text) || /^\\\\[^\\]+\\[^\\]+/.test(text);
+  const headers = { "content-type": "application/json" };
+  if (settings.username && settings.password) {
+    const token = Buffer.from(`${settings.username}:${settings.password}`).toString("base64");
+    headers.authorization = `Basic ${token}`;
+  }
+  return headers;
 }
 
 function getSyncUrl(settings) {
   if (settings.mode === "webdav") return settings.webdavUrl;
-  if (settings.mode === "ip" && !looksLikeFilePath(settings.remoteUrl)) return settings.remoteUrl;
+  if (settings.mode === "ip") return settings.remoteUrl;
   return "";
 }
 
 function getFolderSyncPath(settings) {
-  if (settings.mode !== "ip") return "";
-  const target = String(settings.remoteUrl || "").trim();
-  if (!looksLikeFilePath(target)) return "";
-  return path.extname(target).toLowerCase() === ".json"
-    ? target
-    : path.join(target, "linkoteca.json");
+  if (!["localFolder", "oneDrive"].includes(settings.mode)) return "";
+  const folderPath = String(settings.folderPath || settings.storagePath || "").trim();
+  if (!folderPath) return "";
+  return path.join(folderPath, "linkoteca.json");
 }
 
 function effectiveUpdates(settings = {}) {
   const defaults = defaultSettings().updates;
   return {
-    latestVersionUrl: settings.latestVersionUrl || defaults.latestVersionUrl
+    latestVersionUrl: settings.latestVersionUrl || defaults.latestVersionUrl,
+    pcUrl: settings.pcUrl || defaults.pcUrl
   };
 }
 
-function csvEscape(value) {
-  const text = String(value ?? "");
-  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
-  return text;
+function trustedUpdateDownload(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const trustedPath = /^\/colombianitov2\/linkoteca(?:-beta)?\/releases\/download\//i.test(url.pathname);
+    return url.protocol === "https:" && url.hostname === "github.com" && trustedPath ? url.toString() : "";
+  } catch {
+    return "";
+  }
 }
 
-function libraryToRows(db) {
-  const categoryMap = new Map(db.categories.map((category) => [category.id, category.name]));
-  return db.links.map((link) => ({
-    title: link.title || "",
-    url: link.url || "",
-    description: link.description || "",
-    category: categoryMap.get(link.categoryId) || "",
-    platform: link.platform || "",
-    status: link.status || "",
-    source: link.source || "",
-    createdAt: link.createdAt || "",
-    updatedAt: link.updatedAt || ""
-  }));
+function googleRedirectUri() {
+  return `${appUrl}/api/google/callback`;
 }
 
-function libraryToCsv(db) {
-  const headers = ["title", "url", "description", "category", "platform", "status", "source", "createdAt", "updatedAt"];
-  const rows = libraryToRows(db);
-  return [
-    headers.join(","),
-    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))
-  ].join("\n");
+function googleConfig(settings = {}) {
+  return {
+    clientId: String(settings.googleClientId || "").trim(),
+    clientSecret: String(settings.googleClientSecret || "").trim(),
+    refreshToken: String(settings.googleRefreshToken || "").trim(),
+    accessToken: String(settings.googleAccessToken || "").trim(),
+    tokenExpiresAt: String(settings.googleTokenExpiresAt || "").trim(),
+    email: String(settings.googleEmail || "").trim(),
+    fileName: String(settings.googleFileName || "linkoteca.json").trim() || "linkoteca.json"
+  };
 }
 
-function libraryToTxt(db) {
-  return libraryToRows(db)
-    .map((row) => [
-      `Título: ${row.title}`,
-      `URL: ${row.url}`,
-      `Carpeta: ${row.category}`,
-      `Plataforma: ${row.platform}`,
-      row.description ? `Descripción: ${row.description}` : "",
-      "---"
-    ].filter(Boolean).join("\n"))
-    .join("\n");
+function ensureGoogleConfigured(settings = {}) {
+  const config = googleConfig(settings);
+  if (!config.clientId || !config.clientSecret) {
+    throw new Error("Configura Google Client ID y Client Secret primero");
+  }
+  return config;
 }
 
-function escapeExcelHtml(value) {
+async function exchangeGoogleToken(params) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error_description || data.error || `Google respondio ${response.status}`);
+  return data;
+}
+
+async function getGoogleUser(accessToken) {
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) return {};
+  return response.json();
+}
+
+async function googleAccessToken(db) {
+  const settings = db.settings.sync || {};
+  const config = ensureGoogleConfigured(settings);
+  const expiresAt = new Date(config.tokenExpiresAt || 0).getTime();
+  if (config.accessToken && expiresAt - Date.now() > 60000) return config.accessToken;
+  if (!config.refreshToken) throw new Error("Conecta una cuenta Google primero");
+
+  const token = await exchangeGoogleToken({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    refresh_token: config.refreshToken,
+    grant_type: "refresh_token"
+  });
+
+  settings.googleAccessToken = token.access_token;
+  settings.googleTokenExpiresAt = new Date(Date.now() + Number(token.expires_in || 3600) * 1000).toISOString();
+  db.settings.sync = settings;
+  await writeDatabase(db);
+  return settings.googleAccessToken;
+}
+
+async function googleDriveRequest(accessToken, url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Google Drive respondio ${response.status}${text ? `: ${text.slice(0, 180)}` : ""}`);
+  }
+  return response;
+}
+
+async function findGoogleBackupFile(accessToken, fileName) {
+  const query = encodeURIComponent(`name='${fileName.replaceAll("'", "\\'")}' and trashed=false`);
+  const url = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}&fields=files(id,name,modifiedTime)`;
+  const response = await googleDriveRequest(accessToken, url);
+  const data = await response.json();
+  return data.files?.[0] || null;
+}
+
+function databaseForCloudBackup(db) {
+  const backup = structuredClone(db);
+  if (backup.settings?.sync) {
+    delete backup.settings.sync.password;
+    delete backup.settings.sync.googleClientSecret;
+    delete backup.settings.sync.googleRefreshToken;
+    delete backup.settings.sync.googleAccessToken;
+    delete backup.settings.sync.googleTokenExpiresAt;
+  }
+  return backup;
+}
+
+function googleMultipartBody(metadata, content) {
+  const boundary = `linkoteca-${crypto.randomUUID()}`;
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    content,
+    `--${boundary}--`,
+    ""
+  ].join("\r\n");
+  return { boundary, body };
+}
+
+async function uploadGoogleBackup(db) {
+  const settings = db.settings.sync || {};
+  const config = googleConfig(settings);
+  const accessToken = await googleAccessToken(db);
+  const content = JSON.stringify(databaseForCloudBackup(db), null, 2);
+  const existing = await findGoogleBackupFile(accessToken, config.fileName);
+
+  if (existing) {
+    await googleDriveRequest(
+      accessToken,
+      `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json; charset=UTF-8" },
+        body: content
+      }
+    );
+    return { ok: true, provider: "googleDrive", fileId: existing.id, updated: true };
+  }
+
+  const multipart = googleMultipartBody({
+    name: config.fileName,
+    parents: ["appDataFolder"],
+    mimeType: "application/json"
+  }, content);
+
+  const response = await googleDriveRequest(
+    accessToken,
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name",
+    {
+      method: "POST",
+      headers: { "content-type": `multipart/related; boundary=${multipart.boundary}` },
+      body: multipart.body
+    }
+  );
+  const data = await response.json();
+  return { ok: true, provider: "googleDrive", fileId: data.id, updated: false };
+}
+
+async function downloadGoogleBackup(db) {
+  const settings = db.settings.sync || {};
+  const config = googleConfig(settings);
+  const accessToken = await googleAccessToken(db);
+  const existing = await findGoogleBackupFile(accessToken, config.fileName);
+  if (!existing) throw new Error("No hay backup de Linkoteca en Google Drive");
+  const response = await googleDriveRequest(
+    accessToken,
+    `https://www.googleapis.com/drive/v3/files/${existing.id}?alt=media`
+  );
+  return response.json();
+}
+
+function escapeStaticHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -736,44 +759,12 @@ function escapeJsSingleQuoted(value) {
     .replace(/\r?\n/g, " ");
 }
 
-function libraryToExcelHtml(db) {
-  const rows = libraryToRows(db);
-  const headers = ["Título", "URL", "Descripción", "Carpeta", "Plataforma", "Estado", "Origen", "Creado", "Actualizado"];
-  const keys = ["title", "url", "description", "category", "platform", "status", "source", "createdAt", "updatedAt"];
-  const head = headers.map((header) => `<th>${escapeExcelHtml(header)}</th>`).join("");
-  const body = rows.map((row) => {
-    return `<tr>${keys.map((key) => `<td>${escapeExcelHtml(row[key])}</td>`).join("")}</tr>`;
-  }).join("");
-  return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    table { border-collapse: collapse; font-family: Calibri, Arial, sans-serif; }
-    th { background: #111111; color: #ffffff; font-weight: 700; }
-    th, td { border: 1px solid #d9d9d9; padding: 6px 8px; vertical-align: top; }
-  </style>
-</head>
-<body>
-  <table>
-    <thead><tr>${head}</tr></thead>
-    <tbody>${body}</tbody>
-  </table>
-</body>
-</html>`;
-}
-
 function linkSummaryText(link, categoryName) {
   return [
     `Titulo: ${link.title || "Enlace sin titulo"}`,
     `URL: ${link.url || ""}`,
     `Carpeta: ${categoryName || "Sin carpeta"}`,
     `Plataforma: ${link.platform || "Web"}`,
-    `Estado: ${link.status || "pendiente"}`,
-    `Confianza: ${typeof link.confidence === "number" ? link.confidence : 0}`,
-    `Etiquetas: ${Array.isArray(link.tags) && link.tags.length ? link.tags.join(", ") : ""}`,
-    `Origen: ${link.source || ""}`,
-    `Categoria ID: ${link.categoryId || ""}`,
     link.description ? `Descripcion: ${link.description}` : "",
     `Actualizado: ${link.updatedAt || ""}`
   ].filter(Boolean).join("\n");
@@ -781,26 +772,6 @@ function linkSummaryText(link, categoryName) {
 
 function shortcutFileBody(link) {
   return `[InternetShortcut]\nURL=${link.url || ""}\n`;
-}
-
-function linkMetadataJson(link, categoryName) {
-  return JSON.stringify({
-    title: link.title || "Enlace sin titulo",
-    url: link.url || "",
-    description: link.description || "",
-    thumbnail: link.thumbnail || "",
-    platform: link.platform || "Web",
-    status: link.status || "pendiente",
-    confidence: typeof link.confidence === "number" ? link.confidence : 0,
-    tags: Array.isArray(link.tags) ? link.tags : [],
-    categoryId: link.categoryId || "",
-    categoryName: categoryName || "Sin carpeta",
-    source: link.source || "",
-    sourceSheet: link.sourceSheet || "",
-    sourceCell: link.sourceCell || "",
-    createdAt: link.createdAt || "",
-    updatedAt: link.updatedAt || ""
-  }, null, 2);
 }
 
 function staticGalleryStyles() {
@@ -969,20 +940,20 @@ function staticGalleryScript() {
 }
 
 function staticGalleryPage({ title, subtitle, cards, backHref = "" }) {
-  const back = backHref ? `<p><a href="${escapeExcelHtml(backHref)}">Volver a carpetas</a></p>` : "";
+  const back = backHref ? `<p><a href="${escapeStaticHtml(backHref)}">Volver a carpetas</a></p>` : "";
   return `<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeExcelHtml(title)}</title>
+  <title>${escapeStaticHtml(title)}</title>
   <link rel="stylesheet" href="${backHref ? "../" : ""}styles.css">
 </head>
 <body>
   <header>
     <span class="eyebrow">Linkoteca exportada</span>
-    <h1>${escapeExcelHtml(title)}</h1>
-    <p>${escapeExcelHtml(subtitle)}</p>
+    <h1>${escapeStaticHtml(title)}</h1>
+    <p>${escapeStaticHtml(subtitle)}</p>
     ${back}
   </header>
   <main>
@@ -995,36 +966,36 @@ function staticGalleryPage({ title, subtitle, cards, backHref = "" }) {
 
 function staticLinkCard(link) {
   const title = link.title || "Enlace sin titulo";
-  const initial = escapeExcelHtml(String(link.platform || "W").slice(0, 1).toUpperCase());
+  const initial = escapeStaticHtml(String(link.platform || "W").slice(0, 1).toUpperCase());
   const thumb = link.thumbnail
-    ? `<img src="${escapeExcelHtml(link.thumbnail)}" alt="">`
+    ? `<img src="${escapeStaticHtml(link.thumbnail)}" alt="">`
     : `<div class="placeholder">${initial}</div>`;
   return `<article class="card">
   <div class="thumb">
     ${thumb}
-    <span class="platform">${escapeExcelHtml(link.platform || "Web")}</span>
+    <span class="platform">${escapeStaticHtml(link.platform || "Web")}</span>
   </div>
   <div class="body">
-    <h2>${escapeExcelHtml(title)}</h2>
-    <p>${escapeExcelHtml(link.description || hostFromUrlSafe(link.url) || link.url)}</p>
+    <h2>${escapeStaticHtml(title)}</h2>
+    <p>${escapeStaticHtml(link.description || hostFromUrlSafe(link.url) || link.url)}</p>
   </div>
   <div class="actions">
-    <a href="${escapeExcelHtml(link.url || "#")}" target="_blank" rel="noopener">Abrir</a>
-    <button type="button" onclick="copyLink('${escapeExcelHtml(escapeJsSingleQuoted(link.url || ""))}')">Copiar</button>
+    <a href="${escapeStaticHtml(link.url || "#")}" target="_blank" rel="noopener">Abrir</a>
+    <button type="button" onclick="copyLink('${escapeStaticHtml(escapeJsSingleQuoted(link.url || ""))}')">Copiar</button>
   </div>
 </article>`;
 }
 
 function staticFolderCard(category, count, folderName) {
   return `<article class="card folder-card">
-  <div class="thumb"><div class="placeholder">${escapeExcelHtml(String(category.name || "C").slice(0, 1).toUpperCase())}</div></div>
+  <div class="thumb"><div class="placeholder">${escapeStaticHtml(String(category.name || "C").slice(0, 1).toUpperCase())}</div></div>
   <div class="body">
-    <h2>${escapeExcelHtml(category.name)}</h2>
+    <h2>${escapeStaticHtml(category.name)}</h2>
     <p>${count} enlaces</p>
   </div>
   <div class="actions">
     <a href="${encodeURIComponent(folderName)}/index.html">Abrir carpeta</a>
-    <button type="button" onclick="copyLink('${escapeExcelHtml(escapeJsSingleQuoted(category.name))}')">Copiar nombre</button>
+    <button type="button" onclick="copyLink('${escapeStaticHtml(escapeJsSingleQuoted(category.name))}')">Copiar nombre</button>
   </div>
 </article>`;
 }
@@ -1061,17 +1032,15 @@ async function exportStaticGallery(db, folderPath) {
       const fileBase = `${String(index + 1).padStart(3, "0")} - ${safeFileName(link.title || hostFromUrlSafe(link.url), link.id)}`;
       await fs.writeFile(path.join(categoryDir, `${fileBase}.url`), shortcutFileBody(link), "utf8");
       await fs.writeFile(path.join(categoryDir, `${fileBase}.txt`), `${linkSummaryText(link, category.name)}\n`, "utf8");
-      await fs.writeFile(path.join(categoryDir, `${fileBase}.json`), `${linkMetadataJson(link, category.name)}\n`, "utf8");
       cards.push(staticLinkCard(link));
     }
 
     await fs.writeFile(path.join(categoryDir, "index.html"), staticGalleryPage({
       title: category.name,
-      subtitle: `${links.length} enlaces clasificados en esta carpeta.`,
+      subtitle: `${links.length} enlaces guardados en esta carpeta.`,
       cards,
       backHref: "../index.html"
     }), "utf8");
-    await fs.writeFile(path.join(categoryDir, "index.txt"), `${links.map((link) => linkSummaryText(link, category.name)).join("\n\n")}\n`, "utf8");
     folderCards.push(staticFolderCard(category, links.length, folderName));
   }
 
@@ -1080,7 +1049,6 @@ async function exportStaticGallery(db, folderPath) {
     subtitle: `${activeLinks.length} enlaces activos organizados en ${byCategory.size} carpetas.`,
     cards: folderCards
   }), "utf8");
-  await fs.writeFile(path.join(root, "index.txt"), `${activeLinks.map((link) => linkSummaryText(link, categoryMap.get(link.categoryId)?.name || "Sin clasificar")).join("\n\n")}\n`, "utf8");
   await fs.writeFile(path.join(root, "linkoteca.json"), `${JSON.stringify(db, null, 2)}\n`, "utf8");
 
   return {
@@ -1091,17 +1059,100 @@ async function exportStaticGallery(db, folderPath) {
   };
 }
 
-function exportPayload(db, format) {
-  if (format === "xls") {
-    return {
-      contentType: "application/vnd.ms-excel; charset=utf-8",
-      extension: "xls",
-      body: libraryToExcelHtml(db)
-    };
+function tabularRows(db) {
+  const categoryNames = new Map(db.categories.map((category) => [category.id, category.name]));
+  return db.links.filter((link) => !link.archived).map((link) => ({
+    url: link.url || "",
+    title: link.title || "",
+    description: link.description || "",
+    category: categoryNames.get(link.categoryId) || ""
+  }));
+}
+
+function delimitedText(db, delimiter) {
+  const escapeCell = (value) => {
+    const text = String(value ?? "");
+    if (delimiter === "\t") return text.replaceAll("\t", " ").replaceAll(/\r?\n/g, " ");
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  const columns = ["url", "title", "description", "category"];
+  return [columns.join(delimiter), ...tabularRows(db).map((row) => columns.map((key) => escapeCell(row[key])).join(delimiter))].join("\r\n");
+}
+
+function exportPayload(db, format = "json") {
+  if (format === "json") return { contentType: "application/json; charset=utf-8", extension: "json", body: JSON.stringify(db, null, 2) };
+  if (format === "csv") return { contentType: "text/csv; charset=utf-8", extension: "csv", body: delimitedText(db, ",") };
+  if (format === "txt") return { contentType: "text/plain; charset=utf-8", extension: "txt", body: delimitedText(db, "\t") };
+  if (format === "xls") return { contentType: "application/vnd.ms-excel; charset=utf-8", extension: "xls", body: delimitedText(db, "\t") };
+  throw new Error("Formato no soportado");
+}
+
+function parseDelimited(content, delimiter) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    if (char === '"') {
+      if (quoted && content[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === delimiter && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && content[index + 1] === "\n") index += 1;
+      row.push(cell);
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
   }
-  if (format === "csv") return { contentType: "text/csv; charset=utf-8", extension: "csv", body: libraryToCsv(db) };
-  if (format === "txt") return { contentType: "text/plain; charset=utf-8", extension: "txt", body: libraryToTxt(db) };
-  return { contentType: "application/json; charset=utf-8", extension: "json", body: JSON.stringify(db, null, 2) };
+  row.push(cell);
+  if (row.some((value) => value.trim())) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows.shift().map((value) => value.trim().toLowerCase());
+  return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+}
+
+function databaseFromRows(rows) {
+  const now = new Date().toISOString();
+  const categories = [];
+  const categoryIds = new Map();
+  const links = [];
+  for (const row of rows) {
+    const url = String(row.url || row.enlace || "").trim();
+    if (!url) continue;
+    const categoryName = String(row.category || row.carpeta || "").trim();
+    let categoryId = null;
+    if (categoryName) {
+      const key = categoryName.toLocaleLowerCase("es");
+      categoryId = categoryIds.get(key);
+      if (!categoryId) {
+        categoryId = crypto.randomUUID();
+        categoryIds.set(key, categoryId);
+        categories.push({ id: categoryId, name: categoryName, groupId: null, createdAt: now, updatedAt: now });
+      }
+    }
+    links.push({
+      id: crypto.randomUUID(),
+      url,
+      title: String(row.title || row.titulo || url).trim(),
+      description: String(row.description || row.descripcion || "").trim(),
+      thumbnail: "",
+      categoryId,
+      status: "confirmado",
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+  return { groups: [], categories, links };
 }
 
 async function exportToFolder(db, folderPath, formats = ["json"]) {
@@ -1133,7 +1184,7 @@ function openInBrowser(url) {
   execFile(opener[0], opener[1], { windowsHide: true }, () => {});
 }
 
-await seedFromExcelIfNeeded();
+await initializeDatabaseIfNeeded();
 
 const app = express();
 app.use((req, res, next) => {
@@ -1148,7 +1199,6 @@ app.use(express.static(publicDir));
 
 app.get("/api/library", async (_req, res) => {
   const db = await readDatabase();
-  if (pruneExpiredTrash(db) > 0) await writeDatabase(db);
   res.json(db);
 });
 
@@ -1158,6 +1208,8 @@ app.get("/api/version", async (_req, res) => {
   const latestVersionUrl = updates.latestVersionUrl || "";
   let latest = appVersion;
   let status = "local";
+  let notes = "";
+  let downloadUrl = "";
   if (latestVersionUrl) {
     try {
       const response = await fetch(latestVersionUrl, { signal: AbortSignal.timeout(6000) });
@@ -1166,10 +1218,15 @@ app.get("/api/version", async (_req, res) => {
       try {
         const payload = JSON.parse(text);
         latest = String(payload.version || payload.latest || appVersion);
+        notes = String(payload.notes || "").trim();
+        downloadUrl = trustedUpdateDownload(payload.downloads?.windows || payload.downloadUrl);
       } catch {
         latest = text.trim().split(/\s+/)[0] || appVersion;
       }
-      status = latest === appVersion ? "current" : "update_available";
+      const comparison = compareVersionParts(latest, appVersion);
+      if (comparison > 0) status = "update_available";
+      else if (comparison < 0) status = "local_newer";
+      else status = "current";
     } catch (error) {
       status = `check_failed: ${error.message}`;
     }
@@ -1180,8 +1237,92 @@ app.get("/api/version", async (_req, res) => {
     version: appVersion,
     latest,
     latestVersionUrl,
+    notes,
+    downloadUrl,
     status
   });
+});
+
+app.get("/api/google/status", async (_req, res) => {
+  const db = await readDatabase();
+  const config = googleConfig(db.settings.sync || {});
+  res.json({
+    ok: true,
+    configured: Boolean(config.clientId && config.clientSecret),
+    connected: Boolean(config.refreshToken),
+    email: config.email,
+    fileName: config.fileName
+  });
+});
+
+app.post("/api/google/auth-url", async (_req, res) => {
+  try {
+    const db = await readDatabase();
+    const config = ensureGoogleConfigured(db.settings.sync || {});
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: googleRedirectUri(),
+      response_type: "code",
+      scope: [
+        "https://www.googleapis.com/auth/drive.appdata",
+        "openid",
+        "email",
+        "profile"
+      ].join(" "),
+      access_type: "offline",
+      prompt: "consent"
+    });
+    res.json({ ok: true, authUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/google/callback", async (req, res) => {
+  try {
+    if (req.query.error) throw new Error(String(req.query.error));
+    const code = String(req.query.code || "");
+    if (!code) throw new Error("Google no devolvio codigo de autorizacion");
+    const db = await readDatabase();
+    const settings = db.settings.sync || {};
+    const config = ensureGoogleConfigured(settings);
+    const token = await exchangeGoogleToken({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: googleRedirectUri()
+    });
+    settings.googleRefreshToken = token.refresh_token || settings.googleRefreshToken || "";
+    settings.googleAccessToken = token.access_token || "";
+    settings.googleTokenExpiresAt = new Date(Date.now() + Number(token.expires_in || 3600) * 1000).toISOString();
+    const user = token.access_token ? await getGoogleUser(token.access_token) : {};
+    settings.googleEmail = user.email || settings.googleEmail || "";
+    settings.mode = "googleDrive";
+    settings.provider = "googleDrive";
+    db.settings.sync = settings;
+    await writeDatabase(db);
+    res.type("html").send(`
+      <!doctype html>
+      <meta charset="utf-8">
+      <title>Linkoteca conectada</title>
+      <body style="font-family: system-ui; padding: 32px; background: #f7f5ef; color: #181818">
+        <h1>Google Drive conectado</h1>
+        <p>Ya puedes volver a Linkoteca y usar Subir nube o Descargar nube.</p>
+        <p>Cuenta: ${String(settings.googleEmail || "conectada").replaceAll("<", "&lt;")}</p>
+      </body>
+    `);
+  } catch (error) {
+    res.status(400).type("html").send(`
+      <!doctype html>
+      <meta charset="utf-8">
+      <title>Error conectando Google</title>
+      <body style="font-family: system-ui; padding: 32px; background: #fff5f5; color: #181818">
+        <h1>No se pudo conectar Google Drive</h1>
+        <p>${String(error.message).replaceAll("<", "&lt;")}</p>
+      </body>
+    `);
+  }
 });
 
 app.get("/api/export/:format", async (req, res) => {
@@ -1198,13 +1339,29 @@ app.get("/api/export/:format", async (req, res) => {
   }
 });
 
+app.post("/api/import", async (req, res) => {
+  try {
+    const format = String(req.body?.format || "json").toLowerCase();
+    const content = String(req.body?.content || "").replace(/^\uFEFF/, "");
+    const db = await readDatabase();
+    if (!["json", "csv", "txt", "xls"].includes(format)) throw new Error("Formato no soportado");
+    const imported = format === "json"
+      ? ensureDatabaseShape(JSON.parse(content))
+      : databaseFromRows(parseDelimited(content, format === "csv" ? "," : "\t"));
+    const merged = mergeRemoteDatabase(db, imported);
+    const importedCount = Math.max(0, merged.links.length - db.links.length);
+    await writeDatabase(merged);
+    res.json({ ok: true, imported: importedCount, categories: merged.categories.length, links: merged.links.length });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/export/local", async (req, res) => {
   try {
     const db = await readDatabase();
     const folderPath = String(req.body?.folderPath || db.settings.storage.path || defaultExportDir);
-    const formats = Array.isArray(req.body?.formats) ? req.body.formats : [db.settings.storage.format || "json"];
-    const allowedFormats = formats.filter((format) => ["json", "csv", "txt", "xls"].includes(format));
-    const written = await exportToFolder(db, folderPath, allowedFormats.length ? allowedFormats : ["json"]);
+    const written = await exportToFolder(db, folderPath, ["json"]);
     res.json({ ok: true, written });
   } catch (error) {
     res.status(400).json({ ok: false, error: error.message });
@@ -1225,7 +1382,7 @@ app.post("/api/export/gallery", async (req, res) => {
 app.post("/api/export/desktop", async (_req, res) => {
   try {
     const db = await readDatabase();
-    const desktopPath = path.resolve(process.env.USERPROFILE || process.env.HOME || defaultExportDir, "Desktop");
+    const desktopPath = path.join(process.env.USERPROFILE || process.env.HOME || defaultExportDir, "Desktop");
     const result = await exportStaticGallery(db, desktopPath);
     res.json({ ok: true, ...result });
   } catch (error) {
@@ -1266,33 +1423,14 @@ app.post("/api/folders/pick", async (req, res) => {
   }
 });
 
-app.post("/api/import/excel", async (req, res) => {
-  try {
-    const scriptPath = path.join(projectRoot, "scripts", "import-excel.ps1");
-    assertWritableInsideProject(dbPath);
-    await execFileAsync("powershell.exe", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      scriptPath
-    ], {
-      cwd: projectRoot,
-      env: { ...process.env, LINKOTECA_HOME: writableRoot },
-      timeout: 120000,
-      windowsHide: true
-    });
-    const db = await readDatabase();
-    res.json({ ok: true, categories: db.categories.length, links: db.links.length });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
 app.post("/api/categories", async (req, res) => {
   try {
     const db = await readDatabase();
-    const category = categoryByName(db, req.body?.name);
+    const groupId = req.body?.groupId || null;
+    if (groupId && !db.groups.some((group) => group.id === groupId && !group.archived)) {
+      return res.status(400).json({ ok: false, error: "Grupo invalido" });
+    }
+    const category = categoryByName(db, req.body?.name, groupId);
     category.updatedAt = new Date().toISOString();
     await writeDatabase(db);
     res.json({ ok: true, category });
@@ -1311,6 +1449,13 @@ app.patch("/api/categories/:id", async (req, res) => {
       category.slug = slugify(category.name);
     }
     if ("parentId" in req.body) category.parentId = req.body.parentId || null;
+    if ("groupId" in req.body) {
+      const groupId = req.body.groupId || null;
+      if (groupId && !db.groups.some((group) => group.id === groupId && !group.archived)) {
+        return res.status(400).json({ ok: false, error: "Grupo invalido" });
+      }
+      category.groupId = groupId;
+    }
     category.updatedAt = new Date().toISOString();
     await writeDatabase(db);
     res.json({ ok: true, category });
@@ -1319,21 +1464,162 @@ app.patch("/api/categories/:id", async (req, res) => {
   }
 });
 
-app.delete("/api/categories/:id", async (req, res) => {
+app.post("/api/groups", async (req, res) => {
   try {
     const db = await readDatabase();
-    const categoryIndex = db.categories.findIndex((item) => item.id === req.params.id);
-    if (categoryIndex < 0) return res.status(404).json({ ok: false, error: "Carpeta no encontrada" });
-    const [category] = db.categories.splice(categoryIndex, 1);
+    const name = String(req.body?.name || "").trim().slice(0, 120);
+    if (!name) return res.status(400).json({ ok: false, error: "Escribe un nombre para el grupo" });
+    const existing = db.groups.find((group) => !group.archived && group.name.toLowerCase() === name.toLowerCase());
+    if (existing) return res.json({ ok: true, group: existing });
     const now = new Date().toISOString();
-    const links = db.links
-      .filter((link) => link.categoryId === category.id && !link.archived)
-      .map((link) => markLinkDeleted(link, now));
+    const group = {
+      id: idFrom("group", name, now),
+      name,
+      createdAt: now,
+      updatedAt: now
+    };
+    db.groups.push(group);
     await writeDatabase(db);
-    res.json({ ok: true, category, links, deletedLinks: links.length });
+    res.json({ ok: true, group });
   } catch (error) {
     res.status(400).json({ ok: false, error: error.message });
   }
+});
+
+app.patch("/api/groups/:id", async (req, res) => {
+  try {
+    const db = await readDatabase();
+    const group = db.groups.find((item) => item.id === req.params.id);
+    if (!group) return res.status(404).json({ ok: false, error: "Grupo no encontrado" });
+    const name = String(req.body?.name || "").trim().slice(0, 120);
+    if (!name) return res.status(400).json({ ok: false, error: "Escribe un nombre para el grupo" });
+    group.name = name;
+    group.updatedAt = new Date().toISOString();
+    await writeDatabase(db);
+    res.json({ ok: true, group });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.delete("/api/groups/:id", async (req, res) => {
+  try {
+    const db = await readDatabase();
+    const index = db.groups.findIndex((item) => item.id === req.params.id);
+    if (index < 0) return res.status(404).json({ ok: false, error: "Grupo no encontrado" });
+    const group = db.groups[index];
+    const categoryIds = new Set(db.categories.filter((category) => category.groupId === group.id).map((category) => category.id));
+    if (req.query.permanent === "1") {
+      db.groups.splice(index, 1);
+      db.categories = db.categories.filter((category) => !categoryIds.has(category.id));
+      db.links = db.links.filter((link) => !categoryIds.has(link.categoryId));
+      await writeDatabase(db);
+      return res.json({ ok: true, deleted: true, group });
+    }
+    const now = new Date().toISOString();
+    group.archived = true;
+    group.archivedAt = now;
+    group.updatedAt = now;
+    for (const category of db.categories) {
+      if (!categoryIds.has(category.id) || category.archived) continue;
+      category.archived = true;
+      category.archivedAt = now;
+      category.archivedByGroupId = group.id;
+      category.updatedAt = now;
+    }
+    for (const link of db.links) {
+      if (!categoryIds.has(link.categoryId) || link.archived) continue;
+      link.archived = true;
+      link.archivedAt = now;
+      link.archivedByGroupId = group.id;
+      link.status = "archivado";
+      link.updatedAt = now;
+    }
+    await writeDatabase(db);
+    res.json({ ok: true, archived: true, group });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/groups/:id/restore", async (req, res) => {
+  const db = await readDatabase();
+  const group = db.groups.find((item) => item.id === req.params.id);
+  if (!group) return res.status(404).json({ ok: false, error: "Grupo no encontrado" });
+  const now = new Date().toISOString();
+  group.archived = false;
+  group.archivedAt = "";
+  group.updatedAt = now;
+  for (const category of db.categories) {
+    if (category.archivedByGroupId !== group.id) continue;
+    category.archived = false;
+    category.archivedAt = "";
+    delete category.archivedByGroupId;
+    category.updatedAt = now;
+  }
+  for (const link of db.links) {
+    if (link.archivedByGroupId !== group.id) continue;
+    link.archived = false;
+    link.archivedAt = "";
+    delete link.archivedByGroupId;
+    if (link.status === "archivado") link.status = "confirmado";
+    link.updatedAt = now;
+  }
+  await writeDatabase(db);
+  res.json({ ok: true, restored: true, group });
+});
+
+app.delete("/api/categories/:id", async (req, res) => {
+  try {
+    const db = await readDatabase();
+    const index = db.categories.findIndex((item) => item.id === req.params.id);
+    if (index < 0) return res.status(404).json({ ok: false, error: "Carpeta no encontrada" });
+    const category = db.categories[index];
+    if (req.query.permanent === "1") {
+      db.categories.splice(index, 1);
+      db.links = db.links.filter((link) => link.categoryId !== category.id);
+      await writeDatabase(db);
+      return res.json({ ok: true, deleted: true, category });
+    }
+    const now = new Date().toISOString();
+    category.archived = true;
+    category.archivedAt = now;
+    category.updatedAt = now;
+    for (const link of db.links) {
+      if (link.categoryId !== category.id || link.archived) continue;
+      link.archived = true;
+      link.archivedAt = now;
+      link.archivedByCategoryId = category.id;
+      link.status = "archivado";
+      link.updatedAt = now;
+    }
+    await writeDatabase(db);
+    res.json({ ok: true, archived: true, category });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/categories/:id/restore", async (req, res) => {
+  const db = await readDatabase();
+  const category = db.categories.find((item) => item.id === req.params.id);
+  if (!category) return res.status(404).json({ ok: false, error: "Carpeta no encontrada" });
+  const group = category.groupId ? db.groups.find((item) => item.id === category.groupId) : null;
+  if (group?.archived) return res.status(400).json({ ok: false, error: "Restaura primero el grupo de esta carpeta" });
+  const now = new Date().toISOString();
+  category.archived = false;
+  category.archivedAt = "";
+  category.updatedAt = now;
+  for (const link of db.links) {
+    if (link.archivedByCategoryId !== category.id) continue;
+    link.archived = false;
+    link.archivedAt = "";
+    delete link.archivedByCategoryId;
+    if (link.status === "archivado") link.status = "confirmado";
+    link.updatedAt = now;
+  }
+  await writeDatabase(db);
+  res.json({ ok: true, restored: true, category });
 });
 
 app.post("/api/links", async (req, res) => {
@@ -1345,19 +1631,21 @@ app.post("/api/links", async (req, res) => {
       const category = db.categories.find((item) => item.id === existing.categoryId);
       return res.status(409).json({
         ok: false,
-        error: `Este enlace ya existe en ${category?.name || "otra carpeta"}.`
+        error: `Este enlace ya existe en ${category?.name || "Todos"}.`
       });
     }
-    const category = req.body.categoryId
-      ? db.categories.find((item) => item.id === req.body.categoryId)
-      : categoryByName(db, req.body.categoryName || "General");
-    if (!category) return res.status(400).json({ ok: false, error: "Carpeta invalida" });
+    let category = null;
+    if (req.body.categoryId) category = db.categories.find((item) => item.id === req.body.categoryId && !item.archived);
+    else if (req.body.categoryName) category = categoryByName(db, req.body.categoryName);
+    if ((req.body.categoryId || req.body.categoryName) && !category) {
+      return res.status(400).json({ ok: false, error: "Carpeta invalida" });
+    }
     const now = new Date().toISOString();
     const link = {
       id: idFrom(payload.url, now),
       ...payload,
-      categoryId: category.id,
-      status: "pendiente",
+      categoryId: category?.id || null,
+      status: "confirmado",
       confidence: 0,
       source: "manual",
       sourceSheet: "",
@@ -1385,15 +1673,20 @@ app.patch("/api/links/:id", async (req, res) => {
     if (req.body.status !== undefined) link.status = String(req.body.status).trim();
     if (Array.isArray(req.body.tags)) link.tags = req.body.tags.map(String).slice(0, 20);
     if (req.body.archived !== undefined) {
-      if (Boolean(req.body.archived)) markLinkDeleted(link);
-      else restoreDeletedLink(link);
+      link.archived = Boolean(req.body.archived);
+      link.archivedAt = link.archived ? new Date().toISOString() : "";
+      if (link.archived) link.status = "archivado";
+      else if (link.status === "archivado") link.status = "confirmado";
     }
     if (req.body.categoryId !== undefined) {
-      const category = db.categories.find((item) => item.id === req.body.categoryId);
-      if (!category) return res.status(400).json({ ok: false, error: "Carpeta invalida" });
-      link.categoryId = category.id;
+      const categoryId = req.body.categoryId || null;
+      const category = categoryId ? db.categories.find((item) => item.id === categoryId && !item.archived) : null;
+      if (categoryId && !category) return res.status(400).json({ ok: false, error: "Carpeta invalida" });
+      link.categoryId = category?.id || null;
       link.archived = false;
       link.archivedAt = "";
+      delete link.archivedByCategoryId;
+      delete link.archivedByGroupId;
       link.status = "confirmado";
       link.confidence = 1;
     }
@@ -1405,43 +1698,20 @@ app.patch("/api/links/:id", async (req, res) => {
   }
 });
 
-app.post("/api/links/bulk/delete", async (req, res) => {
-  try {
-    const ids = Array.isArray(req.body?.ids) ? new Set(req.body.ids.map(String)) : new Set();
-    if (ids.size === 0) return res.status(400).json({ ok: false, error: "Selecciona enlaces primero" });
-    const db = await readDatabase();
-    const now = new Date().toISOString();
-    const links = db.links
-      .filter((link) => ids.has(link.id))
-      .map((link) => markLinkDeleted(link, now));
-    await writeDatabase(db);
-    res.json({ ok: true, links, count: links.length });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-app.post("/api/links/bulk/restore", async (req, res) => {
-  try {
-    const ids = Array.isArray(req.body?.ids) ? new Set(req.body.ids.map(String)) : new Set();
-    if (ids.size === 0) return res.status(400).json({ ok: false, error: "Selecciona enlaces primero" });
-    const db = await readDatabase();
-    const now = new Date().toISOString();
-    const links = db.links
-      .filter((link) => ids.has(link.id))
-      .map((link) => restoreDeletedLink(link, now));
-    await writeDatabase(db);
-    res.json({ ok: true, links, count: links.length });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
 app.delete("/api/links/:id", async (req, res) => {
   const db = await readDatabase();
-  const link = db.links.find((item) => item.id === req.params.id);
+  const index = db.links.findIndex((item) => item.id === req.params.id);
+  const link = db.links[index];
   if (!link) return res.status(404).json({ ok: false, error: "Enlace no encontrado" });
-  markLinkDeleted(link);
+  if (req.query.permanent === "1" || link.archived) {
+    const [deletedLink] = db.links.splice(index, 1);
+    await writeDatabase(db);
+    return res.json({ ok: true, deleted: true, link: deletedLink });
+  }
+  link.archived = true;
+  link.archivedAt = new Date().toISOString();
+  link.status = "archivado";
+  link.updatedAt = new Date().toISOString();
   await writeDatabase(db);
   res.json({ ok: true, archived: true, link });
 });
@@ -1450,7 +1720,17 @@ app.post("/api/links/:id/restore", async (req, res) => {
   const db = await readDatabase();
   const link = db.links.find((item) => item.id === req.params.id);
   if (!link) return res.status(404).json({ ok: false, error: "Enlace no encontrado" });
-  restoreDeletedLink(link);
+  const category = link.categoryId ? db.categories.find((item) => item.id === link.categoryId) : null;
+  const group = category?.groupId ? db.groups.find((item) => item.id === category.groupId) : null;
+  if (category?.archived || group?.archived) {
+    return res.status(400).json({ ok: false, error: "Restaura primero la carpeta o grupo de este enlace" });
+  }
+  link.archived = false;
+  link.archivedAt = "";
+  delete link.archivedByCategoryId;
+  delete link.archivedByGroupId;
+  if (link.status === "archivado") link.status = "confirmado";
+  link.updatedAt = new Date().toISOString();
   await writeDatabase(db);
   res.json({ ok: true, restored: true, link });
 });
@@ -1476,44 +1756,6 @@ app.post("/api/preview", async (req, res) => {
   }
 });
 
-app.post("/api/previews/enrich", async (req, res) => {
-  try {
-    const db = await readDatabase();
-    let cleaned = 0;
-    for (const link of db.links) {
-      if (sanitizeLinkPreviewFields(link)) cleaned += 1;
-    }
-    const limit = Math.max(1, Math.min(Number(req.body?.limit || 24), 60));
-    const onlyMissing = req.body?.onlyMissing !== false;
-    const candidates = db.links.filter((link) => {
-      if (!/^https?:\/\//i.test(link.url || "")) return false;
-      if (!onlyMissing) return true;
-      return !link.description || !link.thumbnail;
-    }).slice(0, limit);
-
-    let updated = 0;
-    const details = [];
-    for (const link of candidates) {
-      const preview = await fetchPreview(link.url);
-      const changed = applyPreviewToLink(link, preview);
-      if (changed) updated += 1;
-      details.push({
-        id: link.id,
-        title: link.title,
-        updated: changed,
-        hasDescription: Boolean(link.description),
-        hasThumbnail: Boolean(link.thumbnail)
-      });
-    }
-
-    if (updated > 0 || cleaned > 0) await writeDatabase(db);
-    const remaining = db.links.filter((link) => !link.description || !link.thumbnail).length;
-    res.json({ ok: true, processed: candidates.length, updated, cleaned, remaining, details });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
 app.patch("/api/settings", async (req, res) => {
   const db = await readDatabase();
   db.settings = mergeSettings({
@@ -1522,7 +1764,6 @@ app.patch("/api/settings", async (req, res) => {
     contact: { ...db.settings.contact, ...(req.body.contact || {}) },
     storage: { ...db.settings.storage, ...(req.body.storage || {}) },
     sync: { ...db.settings.sync, ...(req.body.sync || {}) },
-    trash: { ...db.settings.trash, ...(req.body.trash || {}) },
     updates: { ...db.settings.updates, ...(req.body.updates || {}) }
   });
   await writeDatabase(db);
@@ -1533,6 +1774,10 @@ app.post("/api/sync/push", async (_req, res) => {
   try {
     const db = await readDatabase();
     const settings = db.settings.sync || {};
+    if (settings.mode === "googleDrive") {
+      const result = await uploadGoogleBackup(db);
+      return res.json(result);
+    }
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1558,6 +1803,12 @@ app.post("/api/sync/pull", async (_req, res) => {
   try {
     const db = await readDatabase();
     const settings = db.settings.sync || {};
+    if (settings.mode === "googleDrive") {
+      const remote = ensureDatabaseShape(await downloadGoogleBackup(db));
+      const merged = mergeRemoteDatabase(db, remote);
+      await writeDatabase(merged);
+      return res.json({ ok: true, provider: "googleDrive", categories: merged.categories.length, links: merged.links.length });
+    }
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1590,6 +1841,21 @@ app.post("/api/sync/auto", async (_req, res) => {
       return res.json({ ok: true, synced: false, reason: "Sin sincronización automática" });
     }
 
+    if (settings.mode === "googleDrive") {
+      try {
+        const remote = ensureDatabaseShape(await downloadGoogleBackup(db));
+        const merged = mergeRemoteDatabase(db, remote);
+        await writeDatabase(merged);
+        return res.json({ ok: true, synced: true, source: "googleDrive", categories: merged.categories.length, links: merged.links.length });
+      } catch (error) {
+        if (/No hay backup/.test(error.message)) {
+          await uploadGoogleBackup(db);
+          return res.json({ ok: true, synced: true, source: "googleDrive-created", categories: db.categories.length, links: db.links.length });
+        }
+        throw error;
+      }
+    }
+
     const folderSyncPath = getFolderSyncPath(settings);
     if (folderSyncPath) {
       assertAllowedExternalWritePath(folderSyncPath);
@@ -1619,6 +1885,46 @@ app.post("/api/sync/auto", async (_req, res) => {
     res.json({ ok: true, synced: true, source: "remote", categories: merged.categories.length, links: merged.links.length });
   } catch (error) {
     res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+function windowsInstructions() {
+  return {
+    name: "Linkoteca-Windows-Instrucciones.txt",
+    body: [
+      "Linkoteca - Windows",
+      "===================",
+      "",
+      "1. En la carpeta del proyecto ejecuta: npm run dist:win",
+      "2. Los ejecutables quedan en dist\\",
+      `3. Usa Linkoteca Setup ${appVersion}.exe como instalador o Linkoteca ${appVersion}.exe como portable.`
+    ].join("\r\n")
+  };
+}
+
+app.get("/api/download/:platform", async (req, res) => {
+  try {
+    const db = await readDatabase();
+    const platform = String(req.params.platform || "windows").toLowerCase();
+    if (!["pc", "windows"].includes(platform)) {
+      return res.status(404).json({ ok: false, error: "Linkoteca solo ofrece aplicación para Windows" });
+    }
+    const updates = effectiveUpdates(db.settings.updates || {});
+
+    const distDir = path.join(projectRoot, "dist");
+    const files = await fs.readdir(distDir).catch(() => []);
+    const setup = files.find((file) => /\.exe$/i.test(file) && /setup/i.test(file));
+    const portable = files.find((file) => /\.exe$/i.test(file));
+    const localFile = setup || portable;
+    if (localFile) return res.download(path.join(distDir, localFile));
+    if (updates.pcUrl) return res.redirect(updates.pcUrl);
+
+    const instructions = windowsInstructions();
+    res.setHeader("content-disposition", `attachment; filename="${instructions.name}"`);
+    res.setHeader("content-type", "text/plain; charset=utf-8");
+    res.send(instructions.body);
+  } catch (error) {
+    res.status(500).send(`Error al preparar descarga: ${error.message}`);
   }
 });
 

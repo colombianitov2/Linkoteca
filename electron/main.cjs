@@ -1,11 +1,10 @@
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, BrowserWindow, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, session, shell } = require("electron");
 
 const port = process.env.LINKOTECA_PORT || "4387";
 const appUrl = `http://localhost:${port}`;
-const iconPath = path.join(__dirname, "..", "build", "icon.ico");
 
 let mainWindow;
 
@@ -44,14 +43,16 @@ async function ensureServer() {
   await waitForServer(`${appUrl}/api/library`);
 }
 
-function createWindow() {
+async function createWindow() {
+  await session.defaultSession.clearStorageData({
+    storages: ["cachestorage", "serviceworkers"]
+  });
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 640,
     title: "Linkoteca",
-    icon: iconPath,
     backgroundColor: "#fbfaf7",
     webPreferences: {
       contextIsolation: true,
@@ -65,21 +66,17 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  mainWindow.loadURL(appUrl);
+  await mainWindow.loadURL(`${appUrl}/?v=19`);
 }
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await ensureServer();
-  await session.defaultSession.clearStorageData({
-    origin: appUrl,
-    storages: ["serviceworkers", "cachestorage"]
-  }).catch(() => {});
-  createWindow();
+  await createWindow();
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow().catch(console.error);
 });
 
 app.on("window-all-closed", () => {

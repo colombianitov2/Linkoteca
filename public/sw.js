@@ -1,4 +1,4 @@
-const CACHE = "linkoteca-v22";
+const CACHE = "linkoteca-v23";
 const ASSETS = [
   "/",
   "/index.html",
@@ -22,16 +22,15 @@ const ASSETS = [
   "/icons/link.svg",
   "/icons/move-right.svg",
   "/icons/panel-left.svg",
-  "/icons/play.svg",
   "/icons/plus.svg",
   "/icons/refresh-cw.svg",
   "/icons/search.svg",
   "/icons/settings.svg",
-  "/icons/smartphone.svg",
   "/icons/sparkles.svg",
   "/icons/tag.svg",
   "/icons/trash.svg",
   "/icons/upload-cloud.svg",
+  "/icons/windows.svg",
   "/icons/x.svg"
 ];
 
@@ -51,18 +50,16 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/")) return;
-  if (event.request.mode === "navigate" || ["/", "/index.html", "/app.js", "/styles.css", "/manifest.webmanifest"].includes(url.pathname)) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+  if (url.pathname.startsWith("/api/") || event.request.method !== "GET") return;
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });

@@ -1,23 +1,30 @@
+function loadCollapsedGroupIds() {
+  try {
+    const value = JSON.parse(localStorage.getItem("linkotecaCollapsedGroups") || "[]");
+    return new Set(Array.isArray(value) ? value : []);
+  } catch {
+    return new Set();
+  }
+}
+
 const state = {
   db: null,
   activeCategoryId: "all",
+  allDateFilter: "today",
   search: "",
   folderSearch: "",
-  foldersExpanded: false,
+  collapsedGroupIds: loadCollapsedGroupIds(),
   processingSharedLinks: false,
   lastSharedUrlKey: "",
   lastSharedAt: 0,
   movingLinkId: null,
   detailLinkId: null,
-  detailDirty: false,
-  detailSaveTimer: 0,
-  selectedLinkIds: new Set(),
-  confirmResolver: null,
+  editingCategoryId: null,
+  editingGroupId: null,
   apiBase: localStorage.getItem("linkotecaApiBase") || ""
 };
 
 const PENDING_SHARES_KEY = "linkotecaPendingShares";
-const GITHUB_PROFILE_URL = "https://github.com/colombianitov2";
 
 const els = {
   allLinksButton: document.querySelector("#allLinksButton"),
@@ -26,21 +33,19 @@ const els = {
   duplicatesCount: document.querySelector("#duplicatesCount"),
   trashButton: document.querySelector("#trashButton"),
   trashCount: document.querySelector("#trashCount"),
+  groupList: document.querySelector("#groupList"),
   categoryList: document.querySelector("#categoryList"),
   activeTitle: document.querySelector("#activeTitle"),
   libraryStats: document.querySelector("#libraryStats"),
   searchInput: document.querySelector("#searchInput"),
+  allDateFilterWrap: document.querySelector("#allDateFilterWrap"),
+  allDateFilter: document.querySelector("#allDateFilter"),
   gallery: document.querySelector("#gallery"),
   emptyState: document.querySelector("#emptyState"),
   addLinkForm: document.querySelector("#addLinkForm"),
   linkUrlInput: document.querySelector("#linkUrlInput"),
   linkTitleInput: document.querySelector("#linkTitleInput"),
   linkCategoryInput: document.querySelector("#linkCategoryInput"),
-  bulkActions: document.querySelector("#bulkActions"),
-  bulkSelectionText: document.querySelector("#bulkSelectionText"),
-  bulkDeleteButton: document.querySelector("#bulkDeleteButton"),
-  bulkRestoreButton: document.querySelector("#bulkRestoreButton"),
-  clearSelectionButton: document.querySelector("#clearSelectionButton"),
   moveDialog: document.querySelector("#moveDialog"),
   moveCategorySelect: document.querySelector("#moveCategorySelect"),
   confirmMoveButton: document.querySelector("#confirmMoveButton"),
@@ -52,36 +57,36 @@ const els = {
   detailUrlInput: document.querySelector("#detailUrlInput"),
   detailOpenButton: document.querySelector("#detailOpenButton"),
   detailCopyButton: document.querySelector("#detailCopyButton"),
+  detailSaveButton: document.querySelector("#detailSaveButton"),
   detailDeleteButton: document.querySelector("#detailDeleteButton"),
   newCategoryButton: document.querySelector("#newCategoryButton"),
   categoryDialog: document.querySelector("#categoryDialog"),
+  categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
   categoryNameInput: document.querySelector("#categoryNameInput"),
+  categoryGroupInput: document.querySelector("#categoryGroupInput"),
   confirmCategoryButton: document.querySelector("#confirmCategoryButton"),
-  confirmDialog: document.querySelector("#confirmDialog"),
-  confirmMessage: document.querySelector("#confirmMessage"),
-  confirmNoButton: document.querySelector("#confirmNoButton"),
-  confirmYesButton: document.querySelector("#confirmYesButton"),
+  confirmCategoryLabel: document.querySelector("#confirmCategoryLabel"),
+  newGroupButton: document.querySelector("#newGroupButton"),
+  groupDialog: document.querySelector("#groupDialog"),
+  groupDialogTitle: document.querySelector("#groupDialogTitle"),
+  groupNameInput: document.querySelector("#groupNameInput"),
+  confirmGroupButton: document.querySelector("#confirmGroupButton"),
+  confirmGroupLabel: document.querySelector("#confirmGroupLabel"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   folderSearchInput: document.querySelector("#folderSearchInput"),
-  toggleFoldersButton: document.querySelector("#toggleFoldersButton"),
-  exportDesktopButton: document.querySelector("#exportDesktopButton"),
-  installedVersionInput: document.querySelector("#installedVersionInput"),
-  githubProfileButton: document.querySelector("#githubProfileButton"),
   checkVersionButton: document.querySelector("#checkVersionButton"),
-  storagePathInput: document.querySelector("#storagePathInput"),
-  storageFormatInput: document.querySelector("#storageFormatInput"),
-  chooseStorageFolderButton: document.querySelector("#chooseStorageFolderButton"),
-  downloadDataButton: document.querySelector("#downloadDataButton"),
-  exportLocalButton: document.querySelector("#exportLocalButton"),
-  syncModeInput: document.querySelector("#syncModeInput"),
-  remoteUrlInput: document.querySelector("#remoteUrlInput"),
-  webdavUrlInput: document.querySelector("#webdavUrlInput"),
-  autoSyncInput: document.querySelector("#autoSyncInput"),
-  trashRetentionDaysInput: document.querySelector("#trashRetentionDaysInput"),
+  versionButtonLabel: document.querySelector("#versionButtonLabel"),
+  versionStatusPanel: document.querySelector("#versionStatusPanel"),
+  versionStatusTitle: document.querySelector("#versionStatusTitle"),
+  versionStatusDetails: document.querySelector("#versionStatusDetails"),
+  versionReleaseNotes: document.querySelector("#versionReleaseNotes"),
+  downloadUpdateButton: document.querySelector("#downloadUpdateButton"),
+  dataFormatInput: document.querySelector("#dataFormatInput"),
+  exportDataButton: document.querySelector("#exportDataButton"),
+  importDataButton: document.querySelector("#importDataButton"),
+  importFileInput: document.querySelector("#importFileInput"),
   saveSettingsButton: document.querySelector("#saveSettingsButton"),
-  pullSyncButton: document.querySelector("#pullSyncButton"),
-  pushSyncButton: document.querySelector("#pushSyncButton"),
   connectionDialog: document.querySelector("#connectionDialog"),
   apiBaseInput: document.querySelector("#apiBaseInput"),
   useLocalApiButton: document.querySelector("#useLocalApiButton"),
@@ -123,39 +128,6 @@ function getYouTubeId(url) {
   return null;
 }
 
-function instagramEmbedUrl(url) {
-  try {
-    const parsed = new URL(url);
-    if (!parsed.hostname.replace(/^www\./, "").toLowerCase().includes("instagram.com")) return "";
-    const [type, shortcode] = parsed.pathname.split("/").filter(Boolean);
-    if (!["p", "reel", "tv"].includes(type) || !shortcode) return "";
-    return `https://www.instagram.com/${type}/${shortcode}/embed/`;
-  } catch {
-    return "";
-  }
-}
-
-function facebookVideoEmbedUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
-    const isFacebook = host.includes("facebook.com") || host.includes("fb.watch");
-    const isVideoPath = /\/(videos|watch|reel|reels)\b/i.test(parsed.pathname) || host.includes("fb.watch");
-    if (!isFacebook || !isVideoPath) return "";
-    return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=560`;
-  } catch {
-    return "";
-  }
-}
-
-function socialVideoEmbedUrl(url) {
-  return instagramEmbedUrl(url) || facebookVideoEmbedUrl(url);
-}
-
-function isVideoPreviewLink(link) {
-  return Boolean(getYouTubeId(link.url) || socialVideoEmbedUrl(link.url));
-}
-
 function apiUrl(path) {
   if (!state.apiBase) return path;
   return new URL(path, state.apiBase).toString();
@@ -176,12 +148,80 @@ function categoryName(categoryId) {
 }
 
 function sortedCategories() {
-  return [...state.db.categories].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const showArchived = state.activeCategoryId === "trash";
+  return state.db.categories
+    .filter((category) => Boolean(category.archived) === showArchived)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
+function sortedGroups() {
+  const showArchived = state.activeCategoryId === "trash";
+  return (state.db.groups || [])
+    .filter((group) => Boolean(group.archived) === showArchived)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
+function startOfDay(value = new Date()) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function linkMatchesAllPeriod(link) {
+  if (state.allDateFilter === "blank") return false;
+  const createdAt = new Date(link.createdAt || 0);
+  if (Number.isNaN(createdAt.getTime())) return false;
+  const today = startOfDay();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  let from = today;
+  let to = tomorrow;
+
+  if (state.allDateFilter === "yesterday") {
+    to = today;
+    from = new Date(today);
+    from.setDate(from.getDate() - 1);
+  } else if (state.allDateFilter === "week") {
+    from = new Date(today);
+    const weekday = (from.getDay() + 6) % 7;
+    from.setDate(from.getDate() - weekday);
+  } else if (state.allDateFilter === "month") {
+    from = new Date(today.getFullYear(), today.getMonth(), 1);
+  } else if (state.allDateFilter === "year") {
+    from = new Date(today.getFullYear(), 0, 1);
+  } else if (state.allDateFilter.startsWith("year:")) {
+    const year = Number(state.allDateFilter.split(":")[1]);
+    from = new Date(year, 0, 1);
+    to = new Date(year + 1, 0, 1);
+  }
+  return createdAt >= from && createdAt < to;
+}
+
+function renderAllDateFilter() {
+  const currentYear = new Date().getFullYear();
+  const dataYears = state.db.links
+    .map((link) => new Date(link.createdAt || 0).getFullYear())
+    .filter((year) => Number.isInteger(year) && year >= 2000 && year <= currentYear);
+  const oldestYear = Math.min(2021, ...dataYears, currentYear);
+  const yearOptions = [];
+  for (let year = currentYear; year >= oldestYear; year -= 1) {
+    yearOptions.push(`<option value="year:${year}">Año ${year}</option>`);
+  }
+  els.allDateFilter.innerHTML = `
+    <option value="blank">Panel en blanco</option>
+    <option value="today">Hoy</option>
+    <option value="yesterday">Ayer</option>
+    <option value="week">Esta semana</option>
+    <option value="month">Este mes</option>
+    <option value="year">Este año</option>
+    ${yearOptions.join("")}
+  `;
+  els.allDateFilter.value = state.allDateFilter;
+  els.allDateFilterWrap.hidden = state.activeCategoryId !== "all";
 }
 
 function countByCategory() {
   const counts = new Map();
-  for (const link of state.db.links.filter((item) => !item.archived)) {
+  const showArchived = state.activeCategoryId === "trash";
+  for (const link of state.db.links.filter((item) => Boolean(item.archived) === showArchived)) {
     counts.set(link.categoryId, (counts.get(link.categoryId) || 0) + 1);
   }
   return counts;
@@ -287,22 +327,23 @@ async function saveSharedLink(payload) {
     title = title || hostFromUrl(payload.url);
   }
 
-  const data = await api("/api/links", {
+  await api("/api/links", {
     method: "POST",
     body: JSON.stringify({
       url: payload.url,
       title,
       description,
       thumbnail,
-      categoryName: "General",
+      categoryName: "Compartidos",
       tags: ["compartido"]
     })
   });
 
-  state.db.links.unshift(data.link);
-  state.activeCategoryId = "all";
+  state.db = await api("/api/library");
+  const sharedCategory = state.db.categories.find((category) => category.name.toLowerCase() === "compartidos");
+  if (sharedCategory) state.activeCategoryId = sharedCategory.id;
   render();
-  toast("Enlace compartido guardado");
+  toast("Enlace compartido guardado en Compartidos");
 }
 
 async function processQueuedSharedLinks() {
@@ -358,57 +399,10 @@ function icon(name, extraStyles = "") {
 }
 
 function toast(message) {
-  clearTimeout(toast.timer);
-  clearTimeout(toast.hideTimer);
-  const openDialogs = [...document.querySelectorAll("dialog[open]")];
-  const toastHost = openDialogs.at(-1) || document.body;
-  if (els.toast.parentElement !== toastHost) toastHost.appendChild(els.toast);
-
   els.toast.textContent = message;
-  els.toast.classList.remove("show");
-
-  requestAnimationFrame(() => els.toast.classList.add("show"));
-  toast.timer = setTimeout(() => {
-    els.toast.classList.remove("show");
-    toast.hideTimer = setTimeout(() => {
-      if (els.toast.parentElement !== document.body) document.body.appendChild(els.toast);
-    }, 180);
-  }, 2200);
-}
-
-function updateLocalLink(updatedLink) {
-  const index = state.db.links.findIndex((link) => link.id === updatedLink.id);
-  if (index >= 0) state.db.links[index] = updatedLink;
-}
-
-function clearSelection() {
-  state.selectedLinkIds.clear();
-}
-
-function pruneSelectionToExistingLinks() {
-  const existingIds = new Set(state.db.links.map((link) => link.id));
-  for (const id of [...state.selectedLinkIds]) {
-    if (!existingIds.has(id)) state.selectedLinkIds.delete(id);
-  }
-}
-
-function selectedLinks() {
-  return state.db.links.filter((link) => state.selectedLinkIds.has(link.id));
-}
-
-function confirmAction(message) {
-  return new Promise((resolve) => {
-    state.confirmResolver = resolve;
-    els.confirmMessage.textContent = message;
-    els.confirmDialog.showModal();
-  });
-}
-
-function resolveConfirm(value) {
-  const resolver = state.confirmResolver;
-  state.confirmResolver = null;
-  if (els.confirmDialog.open) els.confirmDialog.close();
-  if (resolver) resolver(value);
+  els.toast.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => els.toast.classList.remove("show"), 2200);
 }
 
 function filteredLinks() {
@@ -419,7 +413,7 @@ function filteredLinks() {
     const inCategory =
       (state.activeCategoryId === "trash" && archived) ||
       (!archived && (
-        state.activeCategoryId === "all" ||
+        (state.activeCategoryId === "all" && !link.categoryId && linkMatchesAllPeriod(link)) ||
         (state.activeCategoryId === "duplicates" && duplicateUrls.has(normalizedUrl(link.url))) ||
         link.categoryId === state.activeCategoryId
       ));
@@ -440,36 +434,36 @@ function filteredLinks() {
 }
 
 function renderCategoryOptions() {
-  const options = sortedCategories()
+  const categories = state.db.categories.filter((category) => !category.archived).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const groupedOptions = (state.db.groups || []).filter((group) => !group.archived).sort((a, b) => a.name.localeCompare(b.name, "es")).map((group) => {
+    const items = categories
+      .filter((category) => category.groupId === group.id)
+      .map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`)
+      .join("");
+    return items ? `<optgroup label="${escapeAttr(group.name)}">${items}</optgroup>` : "";
+  }).join("");
+  const ungroupedOptions = categories
+    .filter((category) => !category.groupId)
     .map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`)
     .join("");
+  const options = `
+    <option value="">Sin carpeta (Todos)</option>
+    ${groupedOptions}
+    ${ungroupedOptions ? `<optgroup label="Sin grupo">${ungroupedOptions}</optgroup>` : ""}
+  `;
   els.linkCategoryInput.innerHTML = options;
   els.moveCategorySelect.innerHTML = options;
   els.detailCategorySelect.innerHTML = options;
 }
 
-function renderCategories() {
-  const counts = countByCategory();
-  const activeLinks = state.db.links.filter((link) => !link.archived);
-  const duplicatesSet = duplicateUrlSet();
-  const duplicatesCount = activeLinks.filter((link) => duplicatesSet.has(normalizedUrl(link.url))).length;
-  const trashCount = state.db.links.filter((link) => link.archived).length;
-  els.allCount.textContent = activeLinks.length;
-  els.duplicatesCount.textContent = duplicatesCount;
-  els.trashCount.textContent = trashCount;
-  els.categoryList.innerHTML = "";
-  const folderFilter = state.folderSearch.trim().toLowerCase();
-  const categories = sortedCategories();
-  const maxVisible = 15;
-  let visibleCount = 0;
-
-  for (const category of categories) {
+function createCategoryRow(category, counts) {
     const row = document.createElement("div");
     row.className = "category-row";
     const button = document.createElement("button");
     button.type = "button";
     button.className = `category-button${state.activeCategoryId === category.id ? " active" : ""}`;
     button.dataset.categoryId = category.id;
+    button.title = category.name;
     const iconStyle = `--icon-bg: ${getFolderGradient(category.name)};`;
     button.innerHTML = `
       <span class="category-name">
@@ -478,39 +472,113 @@ function renderCategories() {
       </span>
       <span class="count">${counts.get(category.id) || 0}</span>
     `;
-    if (folderFilter && !category.name.toLowerCase().includes(folderFilter)) {
-      row.classList.add("hidden-folder");
-    } else {
-      visibleCount += 1;
-      if (!folderFilter && !state.foldersExpanded && visibleCount > maxVisible && state.activeCategoryId !== category.id) {
-        row.classList.add("hidden-folder");
-      }
-    }
     button.addEventListener("click", () => {
-      clearSelection();
-      state.activeCategoryId = category.id;
+      state.activeCategoryId = category.archived ? "trash" : category.id;
       render();
+    });
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "category-action-button";
+    editButton.title = category.archived ? "Restaurar carpeta" : "Editar carpeta";
+    editButton.setAttribute("aria-label", `${category.archived ? "Restaurar" : "Editar"} carpeta ${category.name}`);
+    editButton.innerHTML = icon(category.archived ? "refresh-cw" : "settings");
+    editButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (category.archived) restoreCategory(category.id).catch((error) => toast(error.message));
+      else openCategoryDialog(category.id);
     });
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
-    deleteButton.className = "category-delete-button";
-    deleteButton.title = `Eliminar carpeta ${category.name}`;
-    deleteButton.setAttribute("aria-label", `Eliminar carpeta ${category.name}`);
+    deleteButton.className = "category-action-button category-delete-button";
+    deleteButton.title = category.archived ? "Eliminar carpeta definitivamente" : "Borrar carpeta";
+    deleteButton.setAttribute("aria-label", `${category.archived ? "Eliminar definitivamente" : "Borrar"} carpeta ${category.name}`);
     deleteButton.innerHTML = icon("trash");
     deleteButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      deleteCategory(category.id).catch((error) => toast(error.message));
+      deleteCategory(category.id, { permanent: Boolean(category.archived) }).catch((error) => toast(error.message));
     });
-    row.append(button, deleteButton);
-    els.categoryList.append(row);
+    row.append(button, editButton, deleteButton);
+    return row;
+}
+
+function persistCollapsedGroups() {
+  localStorage.setItem("linkotecaCollapsedGroups", JSON.stringify([...state.collapsedGroupIds]));
+}
+
+function renderCategories() {
+  const counts = countByCategory();
+  const activeLinks = state.db.links.filter((link) => !link.archived);
+  const unassignedLinks = activeLinks.filter((link) => !link.categoryId);
+  const duplicatesSet = duplicateUrlSet();
+  const duplicatesCount = activeLinks.filter((link) => duplicatesSet.has(normalizedUrl(link.url))).length;
+  const trashCount = state.db.links.filter((link) => link.archived).length
+    + state.db.categories.filter((category) => category.archived).length
+    + (state.db.groups || []).filter((group) => group.archived).length;
+  els.allCount.textContent = unassignedLinks.length;
+  els.duplicatesCount.textContent = duplicatesCount;
+  els.trashCount.textContent = trashCount;
+  els.groupList.innerHTML = "";
+  els.categoryList.innerHTML = "";
+  const folderFilter = state.folderSearch.trim().toLowerCase();
+  const categories = sortedCategories();
+
+  const groups = sortedGroups();
+  const visibleGroupIds = new Set(groups.map((group) => group.id));
+  for (const group of groups) {
+    const groupCategories = categories.filter((category) => category.groupId === group.id);
+    const visibleCategories = groupCategories.filter((category) => category.name.toLowerCase().includes(folderFilter));
+    if (folderFilter && visibleCategories.length === 0 && !group.name.toLowerCase().includes(folderFilter)) continue;
+    const section = document.createElement("section");
+    section.className = "folder-group";
+    const header = document.createElement("div");
+    header.className = "folder-group-header";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "folder-group-toggle";
+    const collapsed = state.collapsedGroupIds.has(group.id) && !folderFilter;
+    const linkCount = groupCategories.reduce((total, category) => total + (counts.get(category.id) || 0), 0);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.innerHTML = `<span class="group-chevron" aria-hidden="true">${collapsed ? "▸" : "▾"}</span><span class="group-name">${escapeHtml(group.name)}</span><span class="count">${linkCount}</span>`;
+    toggle.addEventListener("click", () => {
+      if (state.collapsedGroupIds.has(group.id)) state.collapsedGroupIds.delete(group.id);
+      else state.collapsedGroupIds.add(group.id);
+      persistCollapsedGroups();
+      renderCategories();
+    });
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "group-action-button";
+    edit.title = group.archived ? "Restaurar grupo" : "Editar grupo";
+    edit.setAttribute("aria-label", `${group.archived ? "Restaurar" : "Editar"} grupo ${group.name}`);
+    edit.innerHTML = icon(group.archived ? "refresh-cw" : "settings");
+    edit.addEventListener("click", () => {
+      if (group.archived) restoreGroup(group.id).catch((error) => toast(error.message));
+      else openGroupDialog(group.id);
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "group-action-button group-delete-button";
+    remove.title = group.archived ? "Eliminar grupo definitivamente" : "Borrar grupo";
+    remove.setAttribute("aria-label", `${group.archived ? "Eliminar definitivamente" : "Borrar"} grupo ${group.name}`);
+    remove.innerHTML = icon("trash");
+    remove.addEventListener("click", () => deleteGroup(group.id, { permanent: Boolean(group.archived) }).catch((error) => toast(error.message)));
+    header.append(toggle, edit, remove);
+    const body = document.createElement("div");
+    body.className = "folder-group-body";
+    body.hidden = collapsed;
+    const categoriesToRender = folderFilter ? visibleCategories : groupCategories;
+    if (categoriesToRender.length === 0) {
+      body.innerHTML = '<p class="group-empty">Sin carpetas</p>';
+    } else {
+      for (const category of categoriesToRender) body.append(createCategoryRow(category, counts));
+    }
+    section.append(header, body);
+    els.groupList.append(section);
   }
-  if (categories.length > maxVisible && !folderFilter) {
-    els.toggleFoldersButton.hidden = false;
-    els.toggleFoldersButton.querySelector("span:last-child").textContent = state.foldersExpanded
-      ? "Mostrar menos"
-      : `Mostrar todas (${categories.length})`;
-  } else {
-    els.toggleFoldersButton.hidden = true;
+
+  const ungrouped = categories.filter((category) => !visibleGroupIds.has(category.groupId) && category.name.toLowerCase().includes(folderFilter));
+  for (const category of ungrouped) {
+    els.categoryList.append(createCategoryRow(category, counts));
   }
   els.allLinksButton.classList.toggle("active", state.activeCategoryId === "all");
   els.duplicatesButton.classList.toggle("active", state.activeCategoryId === "duplicates");
@@ -532,35 +600,25 @@ function renderHeader(links) {
   els.libraryStats.textContent = `${links.length} visibles · ${total} enlaces · ${folders} carpetas`;
 }
 
-function renderBulkActions() {
-  pruneSelectionToExistingLinks();
-  const selected = selectedLinks();
-  els.bulkActions.hidden = selected.length === 0;
-  if (selected.length === 0) return;
-  els.bulkSelectionText.textContent = `${selected.length} seleccionado${selected.length === 1 ? "" : "s"}`;
-  const isTrashView = state.activeCategoryId === "trash";
-  els.bulkDeleteButton.hidden = isTrashView;
-  els.bulkRestoreButton.hidden = !isTrashView;
-}
-
 function renderGallery() {
   const links = filteredLinks();
   renderHeader(links);
-  renderBulkActions();
   els.gallery.innerHTML = "";
   els.emptyState.hidden = links.length > 0;
+  if (state.activeCategoryId === "all") {
+    els.emptyState.textContent = state.allDateFilter === "blank"
+      ? "Panel en blanco. Elige un periodo para ver enlaces sin carpeta."
+      : "No hay enlaces sin carpeta en este periodo.";
+  } else {
+    els.emptyState.textContent = "No hay enlaces en esta vista.";
+  }
 
   for (const link of links) {
     const article = document.createElement("article");
     article.className = "link-card";
     article.innerHTML = `
-      <label class="card-select" title="Seleccionar enlace">
-        <input type="checkbox" data-action="select" ${state.selectedLinkIds.has(link.id) ? "checked" : ""}>
-        <span></span>
-      </label>
       <div class="thumb">
         ${link.thumbnail ? `<img src="${escapeAttr(link.thumbnail)}" alt="">` : `<div class="placeholder">${escapeHtml(platformInitial(link.platform))}</div>`}
-        ${isVideoPreviewLink(link) ? `<span class="play-badge">${icon("play")}</span>` : ""}
         <span class="platform">${escapeHtml(link.platform || "Web")}</span>
       </div>
       <div class="card-body">
@@ -569,7 +627,6 @@ function renderGallery() {
         <div class="card-meta">
           <span class="pill">${icon("folder", `--icon-bg: ${getFolderGradient(categoryName(link.categoryId))};`)}<span>${escapeHtml(categoryName(link.categoryId))}</span></span>
           <span class="pill">${icon("globe")}<span>${escapeHtml(hostFromUrl(link.url))}</span></span>
-          ${link.status !== "confirmado" ? `<span class="pill status">${icon("clock-3")}<span>${escapeHtml(link.status)}</span></span>` : ""}
         </div>
       </div>
       <div class="card-actions">
@@ -577,21 +634,14 @@ function renderGallery() {
         <button type="button" data-action="copy" title="Copiar enlace">${icon("copy")}Copiar</button>
         <button type="button" data-action="detail" title="Editar enlace">${icon("settings")}Editar</button>
         ${link.archived
-          ? `<button type="button" data-action="restore" title="Restaurar enlace">${icon("check")}Restaurar</button>`
-          : `
-            <button type="button" data-action="move" title="Mover de carpeta">${icon("move-right")}Mover</button>
-            <button type="button" data-action="delete" title="Eliminar enlace">${icon("trash")}Eliminar</button>
-          `}
+          ? `<button type="button" data-action="restore" title="Restaurar enlace">${icon("check")}Restaurar</button>
+             <button type="button" data-action="delete" title="Eliminar definitivamente">${icon("trash")}Eliminar</button>`
+          : `<button type="button" data-action="move" title="Mover de carpeta">${icon("move-right")}Mover</button>
+             <button type="button" data-action="delete" title="Borrar enlace">${icon("trash")}Borrar</button>`}
       </div>
     `;
     article.addEventListener("click", (event) => {
-      if (!event.target.closest("button, input, label")) openDetailDialog(link.id);
-    });
-    article.querySelector('[data-action="select"]').addEventListener("change", (event) => {
-      event.stopPropagation();
-      if (event.target.checked) state.selectedLinkIds.add(link.id);
-      else state.selectedLinkIds.delete(link.id);
-      renderBulkActions();
+      if (!event.target.closest("button")) openDetailDialog(link.id);
     });
     article.querySelector('[data-action="open"]').addEventListener("click", (event) => {
       event.stopPropagation();
@@ -612,13 +662,6 @@ function renderGallery() {
         openMoveDialog(link.id);
       });
     }
-    const deleteAction = article.querySelector('[data-action="delete"]');
-    if (deleteAction) {
-      deleteAction.addEventListener("click", (event) => {
-        event.stopPropagation();
-        deleteLink(link.id).catch((error) => toast(error.message));
-      });
-    }
     const restoreAction = article.querySelector('[data-action="restore"]');
     if (restoreAction) {
       restoreAction.addEventListener("click", (event) => {
@@ -626,6 +669,10 @@ function renderGallery() {
         restoreLink(link.id);
       });
     }
+    article.querySelector('[data-action="delete"]').addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteLink(link.id, { permanent: Boolean(link.archived) }).catch((error) => toast(error.message));
+    });
     els.gallery.append(article);
   }
 }
@@ -633,6 +680,7 @@ function renderGallery() {
 function render() {
   renderCategoryOptions();
   renderCategories();
+  renderAllDateFilter();
   renderGallery();
 }
 
@@ -655,7 +703,7 @@ async function copyLink(url) {
 function openMoveDialog(linkId) {
   state.movingLinkId = linkId;
   const link = state.db.links.find((item) => item.id === linkId);
-  if (link) els.moveCategorySelect.value = link.categoryId;
+  if (link) els.moveCategorySelect.value = link.categoryId || "";
   els.moveDialog.showModal();
 }
 
@@ -663,38 +711,28 @@ function openDetailDialog(linkId) {
   const link = state.db.links.find((item) => item.id === linkId);
   if (!link) return;
   state.detailLinkId = linkId;
-  state.detailDirty = false;
-  clearTimeout(state.detailSaveTimer);
   els.detailTitleInput.value = link.title || "";
   els.detailDescriptionInput.value = link.description || "";
-  els.detailCategorySelect.value = link.categoryId;
+  els.detailCategorySelect.value = link.categoryId || "";
   els.detailUrlInput.value = link.url;
   const youtubeId = getYouTubeId(link.url);
-  const socialEmbedUrl = socialVideoEmbedUrl(link.url);
   els.detailPreview.innerHTML = youtubeId
     ? `
       <div class="video-container">
         <iframe src="https://www.youtube.com/embed/${escapeAttr(youtubeId)}" title="${escapeAttr(link.title || "Video")}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
       </div>
     `
-    : socialEmbedUrl
-      ? `
-        <div class="video-container social-video-container">
-          <iframe src="${escapeAttr(socialEmbedUrl)}" title="${escapeAttr(link.title || "Vista previa")}" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture" allowfullscreen></iframe>
-        </div>
-      `
     : `
       <div class="thumb detail-thumb">
         ${link.thumbnail ? `<img src="${escapeAttr(link.thumbnail)}" alt="">` : `<div class="placeholder">${escapeHtml(platformInitial(link.platform))}</div>`}
-        ${isVideoPreviewLink(link) ? `<span class="play-badge">${icon("play")}</span>` : ""}
         <span class="platform">${escapeHtml(link.platform || "Web")}</span>
       </div>
     `;
   els.detailDeleteButton.innerHTML = link.archived
-    ? `${icon("check")} Restaurar`
-    : `${icon("trash")} Eliminar`;
-  els.detailDeleteButton.classList.toggle("danger-button", !link.archived);
-  els.detailDeleteButton.classList.toggle("restore-button", Boolean(link.archived));
+    ? `${icon("trash")} Eliminar`
+    : `${icon("trash")} Borrar`;
+  els.detailDeleteButton.classList.toggle("danger-button", true);
+  els.detailDeleteButton.classList.toggle("restore-button", false);
   els.detailDialog.showModal();
 }
 
@@ -713,16 +751,7 @@ async function moveCurrentLink() {
   toast("Enlace movido");
 }
 
-function scheduleDetailAutosave() {
-  if (!state.detailLinkId) return;
-  state.detailDirty = true;
-  clearTimeout(state.detailSaveTimer);
-  state.detailSaveTimer = setTimeout(() => {
-    saveDetail({ silent: true }).catch((error) => toast(error.message));
-  }, 650);
-}
-
-async function saveDetail(options = {}) {
+async function saveDetail() {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (!link) return;
   const data = await api(`/api/links/${link.id}`, {
@@ -733,97 +762,53 @@ async function saveDetail(options = {}) {
       categoryId: els.detailCategorySelect.value
     })
   });
-  updateLocalLink(data.link);
-  state.detailDirty = false;
+  const index = state.db.links.findIndex((item) => item.id === data.link.id);
+  if (index >= 0) state.db.links[index] = data.link;
+  els.detailDialog.close();
+  state.detailLinkId = null;
   render();
-  if (options.close) {
-    els.detailDialog.close();
-    state.detailLinkId = null;
-  }
-  if (!options.silent) toast("Cambios guardados");
+  toast("Enlace guardado");
 }
 
 async function deleteCurrentDetailLink() {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (!link) return;
-  if (link.archived) {
-    await restoreLink(link.id, { closeDetail: true });
-    return;
-  }
-  state.detailDirty = false;
-  await deleteLink(link.id, { closeDetail: true });
+  await deleteLink(link.id, { permanent: Boolean(link.archived), closeDetail: true });
 }
 
 async function deleteLink(linkId, options = {}) {
-  const data = await api(`/api/links/${linkId}`, { method: "DELETE" });
-  updateLocalLink(data.link);
-  state.selectedLinkIds.delete(linkId);
-  if (options.closeDetail) {
-    state.detailDirty = false;
-    clearTimeout(state.detailSaveTimer);
-    state.detailLinkId = null;
-    if (els.detailDialog.open) els.detailDialog.close();
+  const link = state.db.links.find((item) => item.id === linkId);
+  if (!link) return;
+  const permanent = Boolean(options.permanent);
+  const message = permanent
+    ? "¿Eliminar este enlace definitivamente?"
+    : "¿Borrar este enlace y enviarlo a Papelera?";
+  if (!window.confirm(message)) return;
+  const data = await api(`/api/links/${link.id}${permanent ? "?permanent=1" : ""}`, {
+    method: "DELETE"
+  });
+  if (data.deleted) {
+    state.db.links = state.db.links.filter((item) => item.id !== link.id);
+  } else if (data.link) {
+    const index = state.db.links.findIndex((item) => item.id === data.link.id);
+    if (index >= 0) state.db.links[index] = data.link;
   }
+  if (options.closeDetail) state.detailLinkId = null;
+  if (els.detailDialog.open) els.detailDialog.close();
   render();
-  toast("Enlace enviado a Papelera");
-}
-
-async function bulkDeleteSelected() {
-  const ids = selectedLinks().filter((link) => !link.archived).map((link) => link.id);
-  if (ids.length === 0) return;
-  const confirmed = await confirmAction(`¿Está seguro que desea eliminar ${ids.length} enlace${ids.length === 1 ? "" : "s"} seleccionado${ids.length === 1 ? "" : "s"}?`);
-  if (!confirmed) return;
-  const data = await api("/api/links/bulk/delete", {
-    method: "POST",
-    body: JSON.stringify({ ids })
-  });
-  for (const link of data.links) updateLocalLink(link);
-  clearSelection();
-  render();
-  toast(`${data.links.length} enlace${data.links.length === 1 ? "" : "s"} enviado${data.links.length === 1 ? "" : "s"} a Papelera`);
-}
-
-async function bulkRestoreSelected() {
-  const ids = selectedLinks().filter((link) => link.archived).map((link) => link.id);
-  if (ids.length === 0) return;
-  const data = await api("/api/links/bulk/restore", {
-    method: "POST",
-    body: JSON.stringify({ ids })
-  });
-  for (const link of data.links) updateLocalLink(link);
-  clearSelection();
-  state.activeCategoryId = "all";
-  render();
-  toast(`${data.links.length} enlace${data.links.length === 1 ? "" : "s"} restaurado${data.links.length === 1 ? "" : "s"}`);
-}
-
-async function deleteCategory(categoryId) {
-  const category = state.db.categories.find((item) => item.id === categoryId);
-  if (!category) return;
-  const confirmed = await confirmAction("¿Está seguro que desea borrar esta carpeta?");
-  if (!confirmed) return;
-  const data = await api(`/api/categories/${categoryId}`, { method: "DELETE" });
-  state.db.categories = state.db.categories.filter((item) => item.id !== categoryId);
-  for (const link of data.links || []) updateLocalLink(link);
-  if (state.activeCategoryId === categoryId) state.activeCategoryId = "all";
-  clearSelection();
-  render();
-  toast(`Carpeta eliminada. ${data.links?.length || 0} enlaces a Papelera`);
+  toast(permanent ? "Enlace eliminado" : "Enlace enviado a Papelera");
 }
 
 async function restoreLink(linkId, options = {}) {
   const data = await api(`/api/links/${linkId}/restore`, { method: "POST" });
-  updateLocalLink(data.link);
-  state.selectedLinkIds.delete(linkId);
-  state.activeCategoryId = "all";
+  const index = state.db.links.findIndex((item) => item.id === data.link.id);
+  if (index >= 0) state.db.links[index] = data.link;
   if (options.closeDetail) {
-    state.detailDirty = false;
-    clearTimeout(state.detailSaveTimer);
+    els.detailDialog.close();
     state.detailLinkId = null;
-    if (els.detailDialog.open) els.detailDialog.close();
   }
   render();
-  toast("Enlace restaurado en Todos");
+  toast("Enlace restaurado");
 }
 
 function openDetailLink() {
@@ -865,20 +850,117 @@ async function useLocalApi() {
   toast("Usando servidor local");
 }
 
-async function createCategory() {
+function renderCategoryGroupOptions() {
+  els.categoryGroupInput.innerHTML = `
+    <option value="">Sin grupo</option>
+    ${sortedGroups().map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join("")}
+  `;
+}
+
+function openCategoryDialog(categoryId = null) {
+  const category = categoryId ? state.db.categories.find((item) => item.id === categoryId) : null;
+  state.editingCategoryId = category?.id || null;
+  renderCategoryGroupOptions();
+  els.categoryDialogTitle.textContent = category ? "Editar carpeta" : "Nueva carpeta";
+  els.confirmCategoryLabel.textContent = category ? "Guardar" : "Crear";
+  els.categoryNameInput.value = category?.name || "";
+  els.categoryGroupInput.value = category?.groupId || "";
+  if (!els.categoryDialog.open) els.categoryDialog.showModal();
+  els.categoryNameInput.focus();
+}
+
+async function saveCategory() {
   const name = els.categoryNameInput.value.trim();
   if (!name) return;
-  const data = await api("/api/categories", {
-    method: "POST",
-    body: JSON.stringify({ name })
+  const categoryId = state.editingCategoryId;
+  const data = await api(categoryId ? `/api/categories/${categoryId}` : "/api/categories", {
+    method: categoryId ? "PATCH" : "POST",
+    body: JSON.stringify({ name, groupId: els.categoryGroupInput.value || null })
   });
   const existing = state.db.categories.findIndex((category) => category.id === data.category.id);
   if (existing >= 0) state.db.categories[existing] = data.category;
   else state.db.categories.push(data.category);
   els.categoryNameInput.value = "";
   els.categoryDialog.close();
+  state.editingCategoryId = null;
   render();
-  toast("Carpeta creada");
+  toast(categoryId ? "Carpeta actualizada" : "Carpeta creada");
+}
+
+function openGroupDialog(groupId = null) {
+  const group = groupId ? state.db.groups.find((item) => item.id === groupId) : null;
+  state.editingGroupId = group?.id || null;
+  els.groupDialogTitle.textContent = group ? "Editar grupo" : "Nuevo grupo";
+  els.confirmGroupLabel.textContent = group ? "Guardar" : "Crear";
+  els.groupNameInput.value = group?.name || "";
+  if (!els.groupDialog.open) els.groupDialog.showModal();
+  els.groupNameInput.focus();
+}
+
+async function saveGroup() {
+  const name = els.groupNameInput.value.trim();
+  if (!name) return;
+  const groupId = state.editingGroupId;
+  const data = await api(groupId ? `/api/groups/${groupId}` : "/api/groups", {
+    method: groupId ? "PATCH" : "POST",
+    body: JSON.stringify({ name })
+  });
+  const existing = state.db.groups.findIndex((group) => group.id === data.group.id);
+  if (existing >= 0) state.db.groups[existing] = data.group;
+  else state.db.groups.push(data.group);
+  els.groupNameInput.value = "";
+  els.groupDialog.close();
+  state.editingGroupId = null;
+  render();
+  toast(groupId ? "Grupo actualizado" : "Grupo creado");
+}
+
+async function deleteGroup(groupId, options = {}) {
+  const group = state.db.groups.find((item) => item.id === groupId);
+  if (!group) return;
+  const permanent = Boolean(options.permanent);
+  const categories = state.db.categories.filter((category) => category.groupId === groupId);
+  const categoryIds = new Set(categories.map((category) => category.id));
+  const linkCount = state.db.links.filter((link) => categoryIds.has(link.categoryId)).length;
+  const message = permanent
+    ? `¿Eliminar definitivamente el grupo "${group.name}", sus ${categories.length} carpeta(s) y ${linkCount} enlace(s)? Esta acción no se puede deshacer.`
+    : `¿Enviar a la Papelera el grupo "${group.name}", sus ${categories.length} carpeta(s) y ${linkCount} enlace(s)?`;
+  if (!window.confirm(message)) return;
+  await api(`/api/groups/${groupId}${permanent ? "?permanent=1" : ""}`, { method: "DELETE" });
+  state.collapsedGroupIds.delete(groupId);
+  persistCollapsedGroups();
+  await load();
+  toast(permanent ? "Grupo eliminado definitivamente" : "Grupo completo enviado a la Papelera");
+}
+
+async function restoreGroup(groupId) {
+  await api(`/api/groups/${groupId}/restore`, { method: "POST" });
+  await load();
+  toast("Grupo, carpetas y enlaces restaurados");
+}
+
+async function deleteCategory(categoryId, options = {}) {
+  const category = state.db.categories.find((item) => item.id === categoryId);
+  if (!category) return;
+  const activeCount = state.db.links.filter((link) => link.categoryId === categoryId && !link.archived).length;
+  const permanent = Boolean(options.permanent);
+  const totalCount = state.db.links.filter((link) => link.categoryId === categoryId).length;
+  const message = permanent
+    ? `¿Eliminar definitivamente la carpeta "${category.name}" y sus ${totalCount} enlace(s)? Esta acción no se puede deshacer.`
+    : activeCount > 0
+    ? `¿Enviar la carpeta "${category.name}" y sus ${activeCount} enlace(s) a la Papelera?`
+    : `¿Enviar la carpeta "${category.name}" a la Papelera?`;
+  if (!window.confirm(message)) return;
+  await api(`/api/categories/${categoryId}${permanent ? "?permanent=1" : ""}`, { method: "DELETE" });
+  if (state.activeCategoryId === categoryId) state.activeCategoryId = "all";
+  await load();
+  toast(permanent ? "Carpeta eliminada definitivamente" : "Carpeta enviada a la Papelera");
+}
+
+async function restoreCategory(categoryId) {
+  await api(`/api/categories/${categoryId}/restore`, { method: "POST" });
+  await load();
+  toast("Carpeta y enlaces restaurados");
 }
 
 async function addLink(event) {
@@ -921,48 +1003,23 @@ async function addLink(event) {
 }
 
 function fillSettings() {
-  const settings = state.db.settings || {};
-  const storage = settings.storage || {};
-  const sync = settings.sync || {};
-  const trash = settings.trash || {};
-  els.storagePathInput.value = storage.path || "";
-  els.storageFormatInput.value = storage.format || "json";
-  els.syncModeInput.value = ["none", "webdav", "ip"].includes(sync.mode) ? sync.mode : "none";
-  els.remoteUrlInput.value = sync.remoteUrl || "";
-  els.webdavUrlInput.value = sync.webdavUrl || "";
-  els.autoSyncInput.checked = sync.autoOnOpen !== false;
-  const retention = String(trash.retentionDays || 30);
-  els.trashRetentionDaysInput.value = ["5", "10", "15", "30"].includes(retention) ? retention : "30";
-  els.installedVersionInput.value = "Consultando...";
-  checkVersion(false).catch(() => {
-    els.installedVersionInput.value = "0.2.0";
-  });
+  els.dataFormatInput.value = state.db.settings?.storage?.format || "json";
+  els.versionButtonLabel.textContent = "Verificar versión";
+  els.versionStatusPanel.hidden = true;
+  els.downloadUpdateButton.hidden = true;
+}
+
+function openSettingsDialog() {
+  if (!els.settingsDialog.open) els.settingsDialog.showModal();
+  try {
+    fillSettings();
+  } catch (error) {
+    toast(`No se pudo cargar una opción: ${error.message}`);
+  }
 }
 
 async function saveSettings() {
-  const currentUpdates = state.db.settings?.updates || {};
-  const settings = {
-    storage: {
-      path: els.storagePathInput.value.trim(),
-      format: els.storageFormatInput.value
-    },
-    sync: {
-      mode: els.syncModeInput.value,
-      provider: els.syncModeInput.value,
-      autoOnOpen: els.autoSyncInput.checked,
-      remoteUrl: els.remoteUrlInput.value.trim(),
-      webdavUrl: els.webdavUrlInput.value.trim(),
-      folderPath: "",
-      username: "",
-      password: ""
-    },
-    trash: {
-      retentionDays: Number(els.trashRetentionDaysInput.value || 30)
-    },
-    updates: {
-      ...currentUpdates
-    }
-  };
+  const settings = { storage: { format: els.dataFormatInput.value } };
   const data = await api("/api/settings", {
     method: "PATCH",
     body: JSON.stringify(settings)
@@ -971,64 +1028,62 @@ async function saveSettings() {
   toast("Configuración guardada");
 }
 
-async function syncPull() {
-  await saveSettings();
-  await api("/api/sync/pull", { method: "POST" });
-  await load();
-  toast("Banco descargado");
-}
-
 async function checkVersion(showToast = true) {
-  const data = await api("/api/version");
-  els.installedVersionInput.value = data.version;
-  if (showToast) {
-    if (data.status === "update_available") toast(`Hay actualización: ${data.latest}`);
-    else if (data.status === "current") toast(`Estás al día: ${data.version}`);
-    else if (String(data.status).startsWith("check_failed")) toast("No pude verificar la versión remota");
-    else toast(`Versión local: ${data.version}`);
-  }
-}
+  els.checkVersionButton.disabled = true;
+  els.versionButtonLabel.textContent = "Verificando...";
+  try {
+    const data = await api("/api/version");
+    els.versionButtonLabel.textContent = "Verificar versión";
+    els.versionStatusPanel.hidden = false;
+    els.versionStatusPanel.dataset.status = data.status;
+    els.versionStatusDetails.textContent = `Versión instalada: ${data.version} · Versión disponible: ${data.latest}`;
+    els.versionReleaseNotes.textContent = data.notes || "";
+    els.versionReleaseNotes.hidden = !data.notes;
+    els.downloadUpdateButton.hidden = true;
+    els.downloadUpdateButton.dataset.url = "";
 
-async function chooseFolder(targetInput, title) {
-  const result = await api("/api/folders/pick", {
-    method: "POST",
-    body: JSON.stringify({
-      title,
-      initialPath: targetInput.value.trim()
-    })
-  });
-  if (result.path) {
-    targetInput.value = result.path;
-    toast("Carpeta seleccionada");
+    if (data.status === "update_available") {
+      els.versionStatusTitle.textContent = "Hay una nueva versión disponible";
+      if (data.downloadUrl) {
+        els.downloadUpdateButton.dataset.url = data.downloadUrl;
+        els.downloadUpdateButton.hidden = false;
+      }
+    } else if (data.status === "local_newer") {
+      els.versionStatusTitle.textContent = "Esta instalación es más nueva que la versión publicada";
+    } else if (data.status === "current") {
+      els.versionStatusTitle.textContent = "Linkoteca está actualizada";
+    } else {
+      els.versionStatusTitle.textContent = "No se pudo verificar la versión publicada";
+    }
+  } catch (error) {
+    els.versionButtonLabel.textContent = "Verificar versión";
+    els.versionStatusPanel.hidden = false;
+    els.versionStatusPanel.dataset.status = "check_failed";
+    els.versionStatusTitle.textContent = "No se pudo verificar la versión";
+    els.versionStatusDetails.textContent = error.message;
+    els.versionReleaseNotes.hidden = true;
+    els.downloadUpdateButton.hidden = true;
+  } finally {
+    els.checkVersionButton.disabled = false;
   }
 }
 
 function downloadData() {
-  window.open(apiUrl("/api/export/json"), "_blank", "noopener");
+  const format = els.dataFormatInput.value || "json";
+  window.open(`/api/export/${format}`, "_blank", "noopener");
 }
 
-async function exportLocal() {
-  await saveSettings();
-  const formats = Array.from(new Set(["json", els.storageFormatInput.value || "json", "xls", "csv", "txt"]));
-  const result = await api("/api/export/local", {
+async function importData(file) {
+  const format = els.dataFormatInput.value || "json";
+  const result = await api("/api/import", {
     method: "POST",
     body: JSON.stringify({
-      folderPath: els.storagePathInput.value.trim(),
-      formats
+      format,
+      content: await file.text()
     })
   });
-  toast(`Exportado: ${result.written.length} archivos`);
-}
-
-async function exportDesktop() {
-  const result = await api("/api/export/desktop", { method: "POST" });
-  toast(`Galería exportada al Escritorio: ${result.folders} carpetas`);
-}
-
-async function syncPush() {
-  await saveSettings();
-  await api("/api/sync/push", { method: "POST" });
-  toast("Banco subido");
+  await load();
+  toast(`Importación lista: ${result.imported} enlace(s)`);
 }
 
 function escapeHtml(value) {
@@ -1045,15 +1100,6 @@ function escapeAttr(value) {
 }
 
 async function load() {
-  if (!load.autoSyncAttempted) {
-    load.autoSyncAttempted = true;
-    try {
-      const result = await api("/api/sync/auto", { method: "POST" });
-      if (result.synced) toast("Sincronización automática lista");
-    } catch {
-      // La biblioteca debe cargar aunque la nube no esté disponible.
-    }
-  }
   try {
     state.db = await api("/api/library");
     render();
@@ -1065,26 +1111,27 @@ async function load() {
 }
 
 els.allLinksButton.addEventListener("click", () => {
-  clearSelection();
   state.activeCategoryId = "all";
   render();
 });
 
 els.duplicatesButton.addEventListener("click", () => {
-  clearSelection();
   state.activeCategoryId = "duplicates";
   render();
 });
 
 els.trashButton.addEventListener("click", () => {
-  clearSelection();
   state.activeCategoryId = "trash";
   render();
 });
 
 els.searchInput.addEventListener("input", (event) => {
-  clearSelection();
   state.search = event.target.value;
+  renderGallery();
+});
+
+els.allDateFilter.addEventListener("change", (event) => {
+  state.allDateFilter = event.target.value;
   renderGallery();
 });
 
@@ -1104,16 +1151,8 @@ els.detailCopyButton.addEventListener("click", () => {
   copyDetailUrl();
 });
 
-els.detailTitleInput.addEventListener("input", () => {
-  scheduleDetailAutosave();
-});
-
-els.detailDescriptionInput.addEventListener("input", () => {
-  scheduleDetailAutosave();
-});
-
-els.detailCategorySelect.addEventListener("change", () => {
-  scheduleDetailAutosave();
+els.detailSaveButton.addEventListener("click", () => {
+  saveDetail().catch((error) => toast(error.message));
 });
 
 els.detailDeleteButton.addEventListener("click", () => {
@@ -1121,99 +1160,71 @@ els.detailDeleteButton.addEventListener("click", () => {
 });
 
 els.detailDialog.addEventListener("close", () => {
-  clearTimeout(state.detailSaveTimer);
-  if (state.detailDirty && state.detailLinkId) {
-    saveDetail({ silent: true }).catch((error) => toast(error.message));
-  }
   els.detailPreview.innerHTML = "";
   state.detailLinkId = null;
-  state.detailDirty = false;
 });
 
 els.newCategoryButton.addEventListener("click", () => {
-  els.categoryDialog.showModal();
-  els.categoryNameInput.focus();
+  openCategoryDialog();
 });
 
 els.confirmCategoryButton.addEventListener("click", () => {
-  createCategory().catch((error) => toast(error.message));
+  saveCategory().catch((error) => toast(error.message));
 });
 
-els.confirmYesButton.addEventListener("click", () => {
-  resolveConfirm(true);
+els.categoryDialog.addEventListener("close", () => {
+  state.editingCategoryId = null;
 });
 
-els.confirmNoButton.addEventListener("click", () => {
-  resolveConfirm(false);
+els.newGroupButton.addEventListener("click", () => {
+  openGroupDialog();
 });
 
-els.confirmDialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  resolveConfirm(false);
+els.confirmGroupButton.addEventListener("click", () => {
+  saveGroup().catch((error) => toast(error.message));
+});
+
+els.groupDialog.addEventListener("close", () => {
+  state.editingGroupId = null;
 });
 
 els.settingsButton.addEventListener("click", () => {
-  fillSettings();
-  els.settingsDialog.showModal();
+  openSettingsDialog();
 });
 
 els.saveSettingsButton.addEventListener("click", () => {
   saveSettings().catch((error) => toast(error.message));
 });
 
-els.githubProfileButton.addEventListener("click", () => {
-  window.open(GITHUB_PROFILE_URL, "_blank", "noopener");
-});
-
 els.checkVersionButton.addEventListener("click", () => {
   checkVersion(true).catch((error) => toast(error.message));
 });
 
-els.downloadDataButton.addEventListener("click", () => {
+els.downloadUpdateButton.addEventListener("click", () => {
+  const url = els.downloadUpdateButton.dataset.url;
+  if (!url) return;
+  window.open(url, "_blank", "noopener");
+});
+
+els.exportDataButton.addEventListener("click", () => {
   downloadData();
 });
 
-els.chooseStorageFolderButton.addEventListener("click", () => {
-  chooseFolder(els.storagePathInput, "Elegir carpeta para guardar exportaciones").catch((error) => toast(error.message));
+els.importDataButton.addEventListener("click", () => {
+  const extensions = { json: ".json", csv: ".csv", txt: ".txt", xls: ".xls" };
+  els.importFileInput.accept = extensions[els.dataFormatInput.value] || ".json";
+  els.importFileInput.click();
 });
 
-els.exportLocalButton.addEventListener("click", () => {
-  exportLocal().catch((error) => toast(error.message));
-});
-
-els.exportDesktopButton.addEventListener("click", () => {
-  exportDesktop().catch((error) => toast(error.message));
+els.importFileInput.addEventListener("change", () => {
+  const [file] = els.importFileInput.files;
+  if (file) importData(file).catch((error) => toast(error.message));
+  els.importFileInput.value = "";
 });
 
 els.folderSearchInput.addEventListener("input", (event) => {
   state.folderSearch = event.target.value;
   renderCategories();
-});
-
-els.toggleFoldersButton.addEventListener("click", () => {
-  state.foldersExpanded = !state.foldersExpanded;
-  renderCategories();
-});
-
-els.bulkDeleteButton.addEventListener("click", () => {
-  bulkDeleteSelected().catch((error) => toast(error.message));
-});
-
-els.bulkRestoreButton.addEventListener("click", () => {
-  bulkRestoreSelected().catch((error) => toast(error.message));
-});
-
-els.clearSelectionButton.addEventListener("click", () => {
-  clearSelection();
-  renderGallery();
-});
-
-els.pullSyncButton.addEventListener("click", () => {
-  syncPull().catch((error) => toast(error.message));
-});
-
-els.pushSyncButton.addEventListener("click", () => {
-  syncPush().catch((error) => toast(error.message));
 });
 
 els.saveApiBaseButton.addEventListener("click", () => {

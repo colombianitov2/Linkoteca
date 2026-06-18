@@ -1,24 +1,53 @@
-# Empaquetado Windows
+# Empaquetado de Linkoteca
 
-Linkoteca se empaqueta como aplicación de escritorio para Windows usando Electron y electron-builder.
-
-## Crear ejecutables localmente
+## Probar en desarrollo
 
 ```powershell
-npm install
+cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
+npm start
+```
+
+La interfaz queda en:
+
+```text
+http://localhost:4387
+```
+
+## Probar como app de escritorio
+
+```powershell
+cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
+npm run desktop
+```
+
+Esta version usa Electron y levanta el servidor interno automaticamente.
+
+## Generar Windows
+
+```powershell
+cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
 npm run dist:win
 ```
 
-Los ejecutables quedan en la carpeta `dist`:
+Archivos generados:
 
-- `Linkoteca Setup <version>.exe`
-- `Linkoteca <version>.exe`
+```text
+D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca Setup 0.3.0-beta.2.exe
+D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca 0.3.0-beta.2.exe
+```
 
-## Publicar en GitHub
+El primero es instalador. El segundo es portable.
 
-Al subir un tag como `v1.0.0`, GitHub Actions genera:
+## Datos del usuario
 
-- `Linkoteca-Windows-Setup.exe`
-- `Linkoteca-Windows-Portable.exe`
+En desarrollo los datos viven en:
 
-El workflow publica esos archivos como una release normal de GitHub.
+```text
+D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\data\linkoteca.json
+```
+
+En el ejecutable de escritorio, los datos se copian al perfil del usuario de la app. Eso evita escribir dentro del instalador y conserva la biblioteca aunque actualices el programa.
+
+## Seguridad de rutas
+
+La ruta `D:\Nube` y `D:\Nube\Fotos y videos` siguen bloqueadas. La app no debe escribir ahi.

@@ -1,0 +1,53 @@
+name: Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run dist:win
+      - name: Normalize Windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $setup = Get-ChildItem dist -Filter "*Setup*.exe" | Select-Object -First 1
+          $portable = Get-ChildItem dist -Filter "*.exe" | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
+          if (-not $setup) { throw "No se genero instalador Windows" }
+          Copy-Item $setup.FullName release/Linkoteca-Windows-Setup.exe
+          if ($portable) { Copy-Item $portable.FullName release/Linkoteca-Windows-Portable.exe }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linkoteca-windows
+          path: release/*
+
+  release:
+    name: Publish GitHub release
+    needs: [windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: false
+          overwrite_files: true
+          files: release/*

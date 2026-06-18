@@ -1,0 +1,129 @@
+LINKOTECA - RESUMEN DEL PROYECTO
+
+1. FUNCION PRINCIPAL DE LA APP
+
+Linkoteca es una biblioteca visual de enlaces para Windows.
+Su trabajo principal es:
+- recibir enlaces;
+- mostrarlos como una galeria con vista previa;
+- organizarlos en carpetas creadas manualmente por el usuario;
+- permitir mover, borrar, copiar y restaurar enlaces;
+- sincronizar o respaldar el banco de enlaces en un archivo unico JSON;
+- conectar el banco con servicios externos como Google Drive, Nextcloud/WebDAV, una IP/servidor propio o una carpeta local sincronizada.
+
+La app esta pensada para ser sencilla, moderna y organizada manualmente.
+
+2. CARACTERISTICAS QUE PEDISTE
+
+Pediste que la app:
+- recibiera enlaces manualmente;
+- mostrara una vista previa de cada enlace;
+- organizara enlaces en carpetas por tema;
+- permitiera que el usuario eligiera el nombre de la carpeta;
+- permitiera mover enlaces entre carpetas;
+- permitiera borrar enlaces;
+- permitiera borrar carpetas;
+- evitara mezclar informacion;
+- tuviera apariencia tipo YouTube o galeria visual;
+- mostrara miniatura, titulo y descripcion;
+- funcionara como app de escritorio para Windows;
+- se sincronizara con el banco de enlaces;
+- permitiera respaldo en nube o carpeta local;
+- conectara con Nextcloud, Google Drive, OneDrive o IP propia;
+- tuviera configuracion con creditos, perfil de GitHub y actualizaciones;
+- permitiera elegir carpeta de almacenamiento y descarga;
+- tuviera descarga exclusiva para Windows;
+- estuviera preparada para instalador y ejecutable portable de Windows;
+- respetara que la ruta D:\Nube y sus carpetas superiores no se tocaran;
+- no usara Excel como flujo principal;
+- se mantuviera simple.
+
+3. LO QUE YA ESTA IMPLEMENTADO
+
+3.1 Biblioteca visual
+- Implementado.
+- La app muestra enlaces en tarjetas con miniatura, titulo, descripcion y acciones.
+- La interfaz principal esta en `public/index.html`, `public/app.js` y `public/styles.css`.
+
+3.2 Carpetas manuales
+- Implementado.
+- El usuario crea carpetas con el boton "Nueva carpeta".
+- Las carpetas se pueden organizar en grupos desplegables.
+- Los enlaces se agregan dentro de la carpeta elegida.
+- Las carpetas pueden borrarse si no tienen enlaces activos.
+- El borrado de carpetas con enlaces activos se bloquea con aviso.
+
+3.3 Enlaces
+- Implementado.
+- Se puede agregar un enlace manualmente.
+- Se puede abrir.
+- Se puede copiar al portapapeles.
+- Se puede mover entre carpetas.
+- Se puede borrar.
+- Los enlaces borrados van a Papelera y desde ahi se pueden eliminar definitivamente.
+
+3.4 Vista previa
+- Implementado.
+- La app intenta obtener titulo, descripcion y miniatura desde el enlace.
+
+3.5 Sincronizacion y backup
+- Implementado.
+- El banco principal de datos usa un unico archivo `linkoteca.json`.
+- Se puede exportar ese archivo.
+- Se puede guardar en una carpeta elegida por el usuario.
+- Se puede sincronizar con Google Drive, Nextcloud/WebDAV, una IP/servidor propio o una carpeta local sincronizada.
+
+3.6 Configuracion
+- Implementado.
+- La configuracion incluye:
+  - creditos;
+  - boton al perfil de GitHub del desarrollador;
+  - boton de verificar version;
+  - descarga para Windows;
+  - carpeta de almacenamiento;
+  - opciones de sincronizacion.
+
+3.7 Seguridad de rutas
+- Implementado.
+- La app bloquea la escritura en `D:\Nube` y `D:\Nube\Fotos y videos`.
+- Solo trabaja en la carpeta del proyecto o en ubicaciones elegidas por el usuario que no esten bloqueadas.
+
+3.8 Arranque y pruebas
+- Implementado.
+- La app corre localmente con `npm start`.
+- La interfaz responde en `http://localhost:4387`.
+- Se verifico que la app arranca vacia en una base temporal de prueba.
+
+3.9 Version y beta
+- Implementado.
+- La version local quedo en `0.3.0-beta.2`.
+- El verificador de version distingue cuando la version local es mas nueva que la publicada en GitHub.
+
+4. LO QUE SE DESCARTO POR TU DECISION
+
+Se elimino o se dejo fuera a proposito:
+- analisis real de audio/video;
+- Whisper;
+- analisis de frames;
+- Excel como flujo principal;
+- CSV/TXT/XLS como formatos principales de backup;
+- pagina de descarga para usuario no tecnico como prioridad.
+
+5. LO QUE QUEDA PENDIENTE
+
+- Probar Google Drive con tus credenciales reales.
+- Probar Nextcloud/WebDAV con la cuenta o URL real.
+- Probar OneDrive o carpeta local sincronizada con una carpeta real del usuario.
+- Generar y probar el ejecutable final de Windows.
+- Subir el avance a GitHub cuando autorices la version estable o beta siguiente.
+
+6. ARCHIVOS CLAVE
+
+- Codigo principal: `src/server.js`
+- Interfaz: `public/index.html`
+- Lógica de interfaz: `public/app.js`
+- Estilos: `public/styles.css`
+- Configuracion beta: `updates/latest.json`
+- Requisitos resumidos: `REQUISITOS_LINKOTECA.md`
+
+FIN
