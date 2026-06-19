@@ -1935,7 +1935,7 @@ function windowsInstructions() {
       "",
       "1. En la carpeta del proyecto ejecuta: npm run dist:win",
       "2. Los ejecutables quedan en dist\\",
-      `3. Usa Linkoteca Setup ${appVersion}.exe como instalador o Linkoteca ${appVersion}.exe como portable.`
+      `3. Usa Linkoteca Setup ${appVersion}.exe para instalar o actualizar Linkoteca.`
     ].join("\r\n")
   };
 }
@@ -1952,9 +1952,7 @@ app.get("/api/download/:platform", async (req, res) => {
     const distDir = path.join(projectRoot, "dist");
     const files = await fs.readdir(distDir).catch(() => []);
     const setup = files.find((file) => /\.exe$/i.test(file) && /setup/i.test(file));
-    const portable = files.find((file) => /\.exe$/i.test(file));
-    const localFile = setup || portable;
-    if (localFile) return res.download(path.join(distDir, localFile));
+    if (setup) return res.download(path.join(distDir, setup));
     if (updates.pcUrl) return res.redirect(updates.pcUrl);
 
     const instructions = windowsInstructions();

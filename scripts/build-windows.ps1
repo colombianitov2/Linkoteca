@@ -27,7 +27,7 @@ if ((Test-Path -LiteralPath $AppExe) -and (Test-Path -LiteralPath $IconPath) -an
   & $Rcedit $AppExe --set-icon $IconPath
 }
 
-npx electron-builder --win nsis portable --prepackaged "$WinUnpacked"
+npx electron-builder --win nsis --prepackaged "$WinUnpacked"
 
 Write-Host ""
 Write-Host "Ejecutables Windows generados en:" -ForegroundColor Green
