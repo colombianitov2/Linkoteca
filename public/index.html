@@ -257,10 +257,6 @@
             <strong id="versionStatusTitle"></strong>
             <p id="versionStatusDetails"></p>
             <p id="versionReleaseNotes" class="settings-note" hidden></p>
-            <button id="downloadUpdateButton" class="primary-button" type="button" hidden>
-              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
-              Descargar, instalar y reiniciar
-            </button>
           </div>
         </section>
 
@@ -302,6 +298,24 @@
           <button id="saveSettingsButton" type="button">
             <span class="icon" style="--icon: url('/icons/check.svg')"></span>
             Guardar configuración
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="updateDialog" class="dialog">
+      <form method="dialog" class="dialog-panel">
+        <h2>Hay una nueva versión disponible</h2>
+        <p id="updateDialogDetails" class="dialog-copy"></p>
+        <p id="updateDialogNotes" class="settings-note" hidden></p>
+        <div class="dialog-actions">
+          <button id="cancelUpdateButton" value="cancel" class="ghost-button" type="submit">
+            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
+            Cancelar
+          </button>
+          <button id="confirmUpdateButton" type="button">
+            <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
+            Actualizar
           </button>
         </div>
       </form>

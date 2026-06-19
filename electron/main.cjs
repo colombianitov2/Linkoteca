@@ -4,6 +4,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { app, BrowserWindow, Menu, session, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const { isStrictlyNewer, shouldOfferUpdate } = require("./version.cjs");
 
 let mainWindow;
 let appUrl;
@@ -60,7 +61,12 @@ function configureAutoUpdater() {
     updaterState = { ...updaterState, status: "downloading", percent: Math.round(progress.percent || 0) };
   });
   autoUpdater.on("update-downloaded", (info) => {
-    updaterState = { ...updaterState, status: "downloaded", percent: 100, latest: info.version };
+    const version = app.getVersion();
+    if (!isStrictlyNewer(info.version, version)) {
+      updaterState = { status: "current", percent: 0, version, latest: version };
+      return;
+    }
+    updaterState = { ...updaterState, status: "downloaded", percent: 100, version, latest: info.version };
   });
   autoUpdater.on("error", (error) => {
     updaterState = { ...updaterState, status: "error", error: error.message };
@@ -70,15 +76,16 @@ function configureAutoUpdater() {
 const updateController = {
   async check() {
     if (!app.isPackaged) return null;
-    updaterState = { status: "checking", percent: 0, version: app.getVersion(), latest: app.getVersion() };
+    const version = app.getVersion();
+    updaterState = { status: "checking", percent: 0, version, latest: version };
     lastUpdateCheck = await autoUpdater.checkForUpdates();
-    const latest = lastUpdateCheck?.updateInfo?.version || app.getVersion();
-    const available = Boolean(lastUpdateCheck?.isUpdateAvailable);
+    const latest = lastUpdateCheck?.updateInfo?.version || version;
+    const available = shouldOfferUpdate(lastUpdateCheck, version);
     updaterState = {
       status: available ? "update_available" : "current",
       percent: 0,
-      version: app.getVersion(),
-      latest,
+      version,
+      latest: available ? latest : version,
       notes: releaseNotesText(lastUpdateCheck?.updateInfo?.releaseNotes)
     };
     return { ...updaterState, canAutoUpdate: available };
@@ -88,14 +95,20 @@ const updateController = {
   },
   async download() {
     if (!app.isPackaged) throw new Error("La actualización automática solo está disponible en la aplicación instalada");
-    if (!lastUpdateCheck?.isUpdateAvailable) await this.check();
-    if (!lastUpdateCheck?.isUpdateAvailable) return { ...updaterState };
+    const result = await this.check();
+    if (result.status !== "update_available" || !isStrictlyNewer(result.latest, result.version)) {
+      return { ...updaterState };
+    }
     updaterState = { ...updaterState, status: "downloading", percent: 0 };
     await autoUpdater.downloadUpdate();
     return { ...updaterState };
   },
   install() {
     if (updaterState.status !== "downloaded") throw new Error("La actualización todavía no terminó de descargarse");
+    if (!isStrictlyNewer(updaterState.latest, app.getVersion())) {
+      updaterState = { status: "current", percent: 0, version: app.getVersion(), latest: app.getVersion() };
+      throw new Error("Linkoteca ya tiene instalada la versión más reciente");
+    }
     updaterState = { ...updaterState, status: "installing" };
     setTimeout(() => autoUpdater.quitAndInstall(false, true), 500);
     return { ...updaterState };

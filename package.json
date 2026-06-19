@@ -16,7 +16,8 @@
     "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-linkoteca.ps1",
     "dev": "node src/server.js",
     "desktop": "electron electron/main.cjs",
-    "check": "node --check src/server.js && node --check public/app.js && node --check electron/main.cjs",
+    "check": "node --check src/server.js && node --check public/app.js && node --check electron/main.cjs && node --test tests/*.test.cjs",
+    "test": "node --test tests/*.test.cjs",
     "dist:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "dependencies": {
