@@ -18,9 +18,14 @@ const bundledDbPath = path.join(projectRoot, "data", "linkoteca.json");
 const publicDir = path.join(projectRoot, "public");
 const port = Number(process.env.PORT || 4387);
 const appUrl = `http://localhost:${port}`;
-const appVersion = "0.3.0-beta.2";
-const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/linkoteca-beta/main/updates/latest.json";
+const appVersion = "1.0.2";
+const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/Linkoteca/main/updates/latest.json";
 const developerProfileUrl = "https://github.com/colombianitov2";
+let updateController = null;
+
+export function registerUpdateController(controller) {
+  updateController = controller;
+}
 
 const blockedRoots = [
   path.resolve(projectRoot, "Nube"),
@@ -1203,6 +1208,15 @@ app.get("/api/library", async (_req, res) => {
 });
 
 app.get("/api/version", async (_req, res) => {
+  let automaticUpdateError = "";
+  if (updateController) {
+    try {
+      const result = await updateController.check();
+      if (result) return res.json({ ok: true, app: "Linkoteca", ...result });
+    } catch (error) {
+      automaticUpdateError = error.message;
+    }
+  }
   const db = await readDatabase();
   const updates = effectiveUpdates(db.settings.updates || {});
   const latestVersionUrl = updates.latestVersionUrl || "";
@@ -1239,8 +1253,32 @@ app.get("/api/version", async (_req, res) => {
     latestVersionUrl,
     notes,
     downloadUrl,
+    automaticUpdateError,
     status
   });
+});
+
+app.get("/api/update/status", (_req, res) => {
+  if (!updateController) return res.json({ ok: true, status: "unavailable", percent: 0 });
+  res.json({ ok: true, ...updateController.status() });
+});
+
+app.post("/api/update/download", async (_req, res) => {
+  try {
+    if (!updateController) throw new Error("La actualización automática solo está disponible en la aplicación instalada");
+    res.json({ ok: true, ...(await updateController.download()) });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/update/install", (_req, res) => {
+  try {
+    if (!updateController) throw new Error("La actualización automática solo está disponible en la aplicación instalada");
+    res.json({ ok: true, ...updateController.install() });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
 });
 
 app.get("/api/google/status", async (_req, res) => {

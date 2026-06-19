@@ -1040,12 +1040,10 @@ async function checkVersion(showToast = true) {
     els.versionReleaseNotes.textContent = data.notes || "";
     els.versionReleaseNotes.hidden = !data.notes;
     els.downloadUpdateButton.hidden = true;
-    els.downloadUpdateButton.dataset.url = "";
 
     if (data.status === "update_available") {
       els.versionStatusTitle.textContent = "Hay una nueva versión disponible";
-      if (data.downloadUrl) {
-        els.downloadUpdateButton.dataset.url = data.downloadUrl;
+      if (data.canAutoUpdate || data.downloadUrl) {
         els.downloadUpdateButton.hidden = false;
       }
     } else if (data.status === "local_newer") {
@@ -1201,10 +1199,38 @@ els.checkVersionButton.addEventListener("click", () => {
 });
 
 els.downloadUpdateButton.addEventListener("click", () => {
-  const url = els.downloadUpdateButton.dataset.url;
-  if (!url) return;
-  window.open(url, "_blank", "noopener");
+  installAvailableUpdate().catch((error) => {
+    els.downloadUpdateButton.disabled = false;
+    els.versionStatusPanel.dataset.status = "check_failed";
+    els.versionStatusTitle.textContent = "No se pudo instalar la actualización";
+    els.versionStatusDetails.textContent = error.message;
+  });
 });
+
+async function installAvailableUpdate() {
+  if (!window.confirm("Linkoteca descargará e instalará la actualización. La aplicación se cerrará y volverá a abrir. ¿Continuar?")) return;
+  els.downloadUpdateButton.disabled = true;
+  els.versionStatusTitle.textContent = "Descargando actualización";
+  els.versionStatusDetails.textContent = "Progreso: 0%";
+  const progressTimer = setInterval(async () => {
+    try {
+      const state = await api("/api/update/status");
+      if (state.status === "downloading") {
+        els.versionStatusDetails.textContent = `Progreso: ${Math.round(state.percent || 0)}%`;
+      }
+    } catch {
+      // La solicitud principal informará cualquier fallo.
+    }
+  }, 700);
+  try {
+    await api("/api/update/download", { method: "POST" });
+  } finally {
+    clearInterval(progressTimer);
+  }
+  els.versionStatusTitle.textContent = "Instalando actualización";
+  els.versionStatusDetails.textContent = "Linkoteca se cerrará y reiniciará automáticamente.";
+  await api("/api/update/install", { method: "POST" });
+}
 
 els.exportDataButton.addEventListener("click", () => {
   downloadData();

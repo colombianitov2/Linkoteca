@@ -1,9 +1,9 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "channel": "stable",
-  "notes": "Linkoteca 1.0.1: papelera jerárquica restaurable, exportación e importación, verificación visible y descarga de actualizaciones.",
+  "notes": "Linkoteca 1.0.2: actualización automática dentro de la app y servidor interno aislado.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.1/Linkoteca-Windows-Setup.exe",
-    "windowsPortable": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.1/Linkoteca-Windows-Portable.exe"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.2/Linkoteca-Windows-Setup.exe",
+    "windowsPortable": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.2/Linkoteca-Windows-Portable.exe"
   }
 }

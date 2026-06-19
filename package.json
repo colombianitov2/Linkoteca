@@ -1,6 +1,6 @@
 {
   "name": "linkoteca",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -8,7 +8,7 @@
   "author": "Ernesto Pernett",
   "repository": {
     "type": "git",
-    "url": "https://github.com/colombianitov2/linkoteca-beta.git"
+    "url": "https://github.com/colombianitov2/Linkoteca.git"
   },
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-linkoteca.ps1",
@@ -20,6 +20,7 @@
     "dist:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "express": "^5.1.0",
     "lucide-static": "^1.16.0"
   },
@@ -33,6 +34,11 @@
     "asar": false,
     "directories": {
       "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "colombianitov2",
+      "repo": "Linkoteca"
     },
     "files": [
       "electron/**/*",

@@ -5,6 +5,7 @@ data/thumbnails/
 dist/
 exports/
 logs/
+runtime/
 android/.gradle/
 android/app/build/
 android/local.properties

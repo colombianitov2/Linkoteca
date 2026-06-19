@@ -1,4 +1,4 @@
-const CACHE = "linkoteca-v23";
+const CACHE = "linkoteca-v24";
 const ASSETS = [
   "/",
   "/index.html",
