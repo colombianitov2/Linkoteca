@@ -32,11 +32,10 @@ npm run dist:win
 Archivos generados:
 
 ```text
-D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca Setup 0.3.0-beta.2.exe
-D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca 0.3.0-beta.2.exe
+D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca Setup <version>.exe
 ```
 
-El primero es instalador. El segundo es portable.
+Es el único instalador para Windows y también es utilizado por la actualización automática.
 
 ## Datos del usuario
 

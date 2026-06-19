@@ -51,10 +51,11 @@ http://localhost:4387
 
 - Windows: `npm run dist:win`
 
-El repo incluye `.github/workflows/beta-release.yml` para construir Windows en GitHub Actions. Al crear un tag como `v0.3.0-beta.2`, GitHub publica un prerelease con:
+El repo incluye un workflow para construir Windows en GitHub Actions. Al crear un tag, GitHub publica un release con un único instalador:
 
-- `Linkoteca-Windows-Setup.exe`
-- `Linkoteca-Windows-Portable.exe`
+- `Linkoteca-Setup-<version>.exe`
+
+Ese mismo instalador permite la instalación inicial y las actualizaciones automáticas desde la app.
 
 Ver detalles en [PACKAGING.md](PACKAGING.md).
 

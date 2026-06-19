@@ -24,7 +24,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $setup = Get-ChildItem dist -Filter "*Setup*.exe" | Select-Object -First 1
-          $portable = Get-ChildItem dist -Filter "*.exe" | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
           if (-not $setup) { throw "No se genero instalador Windows" }
           $version = node -p "require('./package.json').version"
           $updaterSetupName = "Linkoteca-Setup-$version.exe"
@@ -46,11 +45,6 @@ jobs:
           sha512: $sha512
           releaseDate: '$releaseDate'
           "@ | Set-Content release/latest.yml -Encoding utf8
-          Copy-Item $setup.FullName release/Linkoteca-Windows-Setup.exe
-          if ($portable) {
-            Copy-Item $portable.FullName release/$portable.Name
-            Copy-Item $portable.FullName release/Linkoteca-Windows-Portable.exe
-          }
       - uses: actions/upload-artifact@v4
         with:
           name: linkoteca-windows

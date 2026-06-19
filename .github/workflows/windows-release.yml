@@ -27,7 +27,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $setup = Get-ChildItem dist -Filter "*Setup*.exe" | Select-Object -First 1
-          $portable = Get-ChildItem dist -Filter "*.exe" | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
           if (-not $setup) { throw "No se genero instalador Windows" }
           $blockmap = Get-ChildItem dist -Filter "*Setup*.exe.blockmap" | Select-Object -First 1
           if (-not $blockmap) { throw "No se genero blockmap del instalador" }
@@ -49,8 +48,6 @@ jobs:
           sha512: $sha512
           releaseDate: '$releaseDate'
           "@ | Set-Content release/latest.yml -Encoding utf8
-          Copy-Item $setup.FullName release/Linkoteca-Windows-Setup.exe
-          if ($portable) { Copy-Item $portable.FullName release/Linkoteca-Windows-Portable.exe }
       - uses: actions/upload-artifact@v4
         with:
           name: linkoteca-windows
@@ -72,8 +69,8 @@ jobs:
           body: |
             Linkoteca para Windows.
 
-            Descarga `Linkoteca-Windows-Setup.exe` para instalar la app en el PC.
-            También se incluye `Linkoteca-Windows-Portable.exe` para abrirla sin instalador.
+            Descarga el único archivo `Linkoteca-Setup-<versión>.exe` para instalar la app en el PC.
+            Este mismo instalador es utilizado por la actualización automática de Linkoteca.
           prerelease: false
           make_latest: true
           overwrite_files: true
