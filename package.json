@@ -32,6 +32,7 @@
   "build": {
     "appId": "com.wolframica.linkoteca",
     "productName": "Linkoteca",
+    "electronVersion": "42.3.0",
     "asar": false,
     "directories": {
       "output": "dist"
@@ -51,6 +52,7 @@
       "README.md"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
