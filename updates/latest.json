@@ -1,8 +1,8 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "channel": "stable",
-  "notes": "Linkoteca 1.0.2: actualización automática dentro de la app y servidor interno aislado.",
+  "notes": "Linkoteca 1.0.3: evita reinstalar la misma versión y corrige el icono de Windows.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.2/Linkoteca-Setup-1.0.2.exe"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.3/Linkoteca-Setup-1.0.3.exe"
   }
 }

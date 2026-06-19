@@ -81,7 +81,11 @@ const els = {
   versionStatusTitle: document.querySelector("#versionStatusTitle"),
   versionStatusDetails: document.querySelector("#versionStatusDetails"),
   versionReleaseNotes: document.querySelector("#versionReleaseNotes"),
-  downloadUpdateButton: document.querySelector("#downloadUpdateButton"),
+  updateDialog: document.querySelector("#updateDialog"),
+  updateDialogDetails: document.querySelector("#updateDialogDetails"),
+  updateDialogNotes: document.querySelector("#updateDialogNotes"),
+  cancelUpdateButton: document.querySelector("#cancelUpdateButton"),
+  confirmUpdateButton: document.querySelector("#confirmUpdateButton"),
   dataFormatInput: document.querySelector("#dataFormatInput"),
   exportDataButton: document.querySelector("#exportDataButton"),
   importDataButton: document.querySelector("#importDataButton"),
@@ -1006,7 +1010,6 @@ function fillSettings() {
   els.dataFormatInput.value = state.db.settings?.storage?.format || "json";
   els.versionButtonLabel.textContent = "Verificar versión";
   els.versionStatusPanel.hidden = true;
-  els.downloadUpdateButton.hidden = true;
 }
 
 function openSettingsDialog() {
@@ -1028,7 +1031,7 @@ async function saveSettings() {
   toast("Configuración guardada");
 }
 
-async function checkVersion(showToast = true) {
+async function checkVersion() {
   els.checkVersionButton.disabled = true;
   els.versionButtonLabel.textContent = "Verificando...";
   try {
@@ -1037,19 +1040,29 @@ async function checkVersion(showToast = true) {
     els.versionStatusPanel.hidden = false;
     els.versionStatusPanel.dataset.status = data.status;
     els.versionStatusDetails.textContent = `Versión instalada: ${data.version} · Versión disponible: ${data.latest}`;
+    els.versionStatusDetails.hidden = false;
     els.versionReleaseNotes.textContent = data.notes || "";
     els.versionReleaseNotes.hidden = !data.notes;
-    els.downloadUpdateButton.hidden = true;
 
     if (data.status === "update_available") {
       els.versionStatusTitle.textContent = "Hay una nueva versión disponible";
-      if (data.canAutoUpdate || data.downloadUrl) {
-        els.downloadUpdateButton.hidden = false;
+      if (data.canAutoUpdate) {
+        els.updateDialogDetails.textContent = `Tienes la versión ${data.version}. Se instalará la versión ${data.latest} y Linkoteca se reiniciará.`;
+        els.updateDialogNotes.textContent = data.notes || "";
+        els.updateDialogNotes.hidden = !data.notes;
+        els.confirmUpdateButton.disabled = false;
+        els.cancelUpdateButton.disabled = false;
+        if (!els.updateDialog.open) els.updateDialog.showModal();
       }
     } else if (data.status === "local_newer") {
       els.versionStatusTitle.textContent = "Esta instalación es más nueva que la versión publicada";
     } else if (data.status === "current") {
       els.versionStatusTitle.textContent = "Linkoteca está actualizada";
+      els.versionStatusDetails.textContent = "";
+      els.versionStatusDetails.hidden = true;
+      els.versionReleaseNotes.textContent = "";
+      els.versionReleaseNotes.hidden = true;
+      if (els.updateDialog.open) els.updateDialog.close("cancel");
     } else {
       els.versionStatusTitle.textContent = "No se pudo verificar la versión publicada";
     }
@@ -1059,8 +1072,8 @@ async function checkVersion(showToast = true) {
     els.versionStatusPanel.dataset.status = "check_failed";
     els.versionStatusTitle.textContent = "No se pudo verificar la versión";
     els.versionStatusDetails.textContent = error.message;
+    els.versionStatusDetails.hidden = false;
     els.versionReleaseNotes.hidden = true;
-    els.downloadUpdateButton.hidden = true;
   } finally {
     els.checkVersionButton.disabled = false;
   }
@@ -1195,28 +1208,34 @@ els.saveSettingsButton.addEventListener("click", () => {
 });
 
 els.checkVersionButton.addEventListener("click", () => {
-  checkVersion(true).catch((error) => toast(error.message));
+  checkVersion().catch((error) => toast(error.message));
 });
 
-els.downloadUpdateButton.addEventListener("click", () => {
+els.confirmUpdateButton.addEventListener("click", () => {
   installAvailableUpdate().catch((error) => {
-    els.downloadUpdateButton.disabled = false;
+    els.confirmUpdateButton.disabled = false;
+    els.cancelUpdateButton.disabled = false;
     els.versionStatusPanel.dataset.status = "check_failed";
     els.versionStatusTitle.textContent = "No se pudo instalar la actualización";
     els.versionStatusDetails.textContent = error.message;
+    els.versionStatusDetails.hidden = false;
+    els.updateDialogDetails.textContent = `No se pudo instalar la actualización: ${error.message}`;
   });
 });
 
 async function installAvailableUpdate() {
-  if (!window.confirm("Linkoteca descargará e instalará la actualización. La aplicación se cerrará y volverá a abrir. ¿Continuar?")) return;
-  els.downloadUpdateButton.disabled = true;
+  els.confirmUpdateButton.disabled = true;
+  els.cancelUpdateButton.disabled = true;
   els.versionStatusTitle.textContent = "Descargando actualización";
   els.versionStatusDetails.textContent = "Progreso: 0%";
+  els.versionStatusDetails.hidden = false;
+  els.updateDialogDetails.textContent = "Descargando actualización: 0%";
   const progressTimer = setInterval(async () => {
     try {
       const state = await api("/api/update/status");
       if (state.status === "downloading") {
         els.versionStatusDetails.textContent = `Progreso: ${Math.round(state.percent || 0)}%`;
+        els.updateDialogDetails.textContent = `Descargando actualización: ${Math.round(state.percent || 0)}%`;
       }
     } catch {
       // La solicitud principal informará cualquier fallo.
@@ -1229,6 +1248,7 @@ async function installAvailableUpdate() {
   }
   els.versionStatusTitle.textContent = "Instalando actualización";
   els.versionStatusDetails.textContent = "Linkoteca se cerrará y reiniciará automáticamente.";
+  els.updateDialogDetails.textContent = "Instalando actualización. Linkoteca se reiniciará automáticamente.";
   await api("/api/update/install", { method: "POST" });
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "linkoteca",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -16,7 +16,8 @@
     "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-linkoteca.ps1",
     "dev": "node src/server.js",
     "desktop": "electron electron/main.cjs",
-    "check": "node --check src/server.js && node --check public/app.js && node --check electron/main.cjs",
+    "check": "node --check src/server.js && node --check public/app.js && node --check electron/main.cjs && node --test tests/*.test.cjs",
+    "test": "node --test tests/*.test.cjs",
     "dist:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
   "build": {
     "appId": "com.wolframica.linkoteca",
     "productName": "Linkoteca",
+    "electronVersion": "42.3.0",
     "asar": false,
     "directories": {
       "output": "dist"
@@ -50,6 +52,7 @@
       "README.md"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
