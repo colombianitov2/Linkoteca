@@ -1,10 +1,7 @@
-name: Windows release
+name: Manual Windows release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: write
@@ -31,11 +28,24 @@ jobs:
           if (-not $setup) { throw "No se genero instalador Windows" }
           $version = node -p "require('./package.json').version"
           $updaterSetupName = "Linkoteca-Setup-$version.exe"
-          Copy-Item dist/latest.yml release/latest.yml
-          Copy-Item $setup.FullName "release/$updaterSetupName"
           $blockmap = Get-ChildItem dist -Filter "*Setup*.exe.blockmap" | Select-Object -First 1
           if (-not $blockmap) { throw "No se genero blockmap del instalador" }
-          Copy-Item $blockmap.FullName "release/$updaterSetupName.blockmap"
+          $updaterSetupPath = "release/$updaterSetupName"
+          Copy-Item $setup.FullName $updaterSetupPath
+          Copy-Item $blockmap.FullName "$updaterSetupPath.blockmap"
+          $sha512 = [Convert]::ToBase64String([Security.Cryptography.SHA512]::HashData([IO.File]::ReadAllBytes((Resolve-Path $updaterSetupPath))))
+          $size = (Get-Item $updaterSetupPath).Length
+          $releaseDate = (Get-Date).ToUniversalTime().ToString("o")
+          @"
+          version: $version
+          files:
+            - url: $updaterSetupName
+              sha512: $sha512
+              size: $size
+          path: $updaterSetupName
+          sha512: $sha512
+          releaseDate: '$releaseDate'
+          "@ | Set-Content release/latest.yml -Encoding utf8
           Copy-Item $setup.FullName release/Linkoteca-Windows-Setup.exe
           if ($portable) {
             Copy-Item $portable.FullName release/$portable.Name
