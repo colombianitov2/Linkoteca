@@ -24,6 +24,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   min-width: 320px;
   background: var(--bg);
@@ -450,7 +454,7 @@ textarea {
   }
 
   .toolbar {
-    grid-template-columns: minmax(260px, 1fr) auto auto;
+    grid-template-columns: minmax(260px, 1fr) repeat(4, auto);
   }
 }
 
@@ -508,10 +512,18 @@ textarea {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 420px) auto;
+  grid-template-columns: minmax(240px, 420px) repeat(4, auto);
   gap: 10px;
   align-items: center;
   min-width: 0;
+}
+
+.bulk-delete-button[hidden],
+.empty-trash-button[hidden],
+.search-wrap[hidden],
+.folder-search-wrap[hidden],
+.add-band[hidden] {
+  display: none;
 }
 
 .search-wrap {
@@ -632,6 +644,19 @@ textarea {
   transform: translateY(-2px);
 }
 
+.link-card.selected {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18), var(--shadow-md);
+}
+
+.gallery.selection-mode .link-card {
+  cursor: pointer;
+}
+
+.gallery.selection-mode .card-actions {
+  display: none;
+}
+
 .thumb {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -639,6 +664,43 @@ textarea {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 22%, transparent 22% 44%, rgba(255, 255, 255, 0.12) 44% 62%, transparent 62% 100%),
     linear-gradient(135deg, #111 0 46%, var(--rose) 46% 62%, var(--teal) 62% 100%);
+}
+
+.link-selection-checkbox {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 26px;
+  min-height: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  padding: 0;
+  color: #fff;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(17, 17, 17, 0.32);
+}
+
+.link-selection-checkbox:hover {
+  border-color: #dbeafe;
+  background: #fff;
+  box-shadow: 0 1px 7px rgba(17, 17, 17, 0.38);
+}
+
+.link-selection-checkbox[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.link-selection-checkbox[aria-pressed="true"]:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
+.link-selection-checkbox .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .thumb img {
@@ -744,9 +806,10 @@ textarea {
 
 .card-actions {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 1px;
   border-top: 1px solid var(--line);
-  background: #fff;
+  background: var(--line);
 }
 
 .card-actions button {
@@ -756,12 +819,15 @@ textarea {
   color: var(--ink);
   background: #fff;
   padding: 0 8px;
+  overflow: hidden;
   font-size: 13px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-actions button + button {
-  border-left: 1px solid var(--line);
+  border-left: 0;
 }
 
 .card-actions button:hover {
@@ -947,39 +1013,6 @@ textarea {
 .github-profile-button:hover {
   border-color: var(--line-strong);
   background: #f2f0ea;
-}
-
-.version-status-panel {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
-}
-
-.version-status-panel[hidden] {
-  display: none;
-}
-
-.version-status-panel[data-status="current"] {
-  border-color: #86c99a;
-  background: #f2fbf4;
-}
-
-.version-status-panel[data-status="update_available"] {
-  border-color: #e7b35b;
-  background: #fff9ec;
-}
-
-.version-status-panel[data-status^="check_failed"] {
-  border-color: #e09a9a;
-  background: #fff4f4;
-}
-
-.version-status-panel p {
-  margin: 0;
 }
 
 .platform-download-btn {
@@ -1231,7 +1264,8 @@ textarea {
     font-size: 26px;
   }
 
-  .toolbar .ghost-button {
+  .toolbar .ghost-button,
+  .toolbar .danger-button {
     width: 100%;
   }
 

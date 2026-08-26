@@ -21,7 +21,10 @@ const state = {
   detailLinkId: null,
   editingCategoryId: null,
   editingGroupId: null,
-  apiBase: localStorage.getItem("linkotecaApiBase") || ""
+  selectionMode: false,
+  selectedLinkIds: new Set(),
+  sessionToken: "",
+  appVersion: ""
 };
 
 const PENDING_SHARES_KEY = "linkotecaPendingShares";
@@ -37,11 +40,17 @@ const els = {
   categoryList: document.querySelector("#categoryList"),
   activeTitle: document.querySelector("#activeTitle"),
   libraryStats: document.querySelector("#libraryStats"),
+  searchWrap: document.querySelector("#searchWrap"),
   searchInput: document.querySelector("#searchInput"),
+  selectLinksButton: document.querySelector("#selectLinksButton"),
+  bulkDeleteButton: document.querySelector("#bulkDeleteButton"),
+  bulkDeleteCount: document.querySelector("#bulkDeleteCount"),
+  emptyTrashButton: document.querySelector("#emptyTrashButton"),
   allDateFilterWrap: document.querySelector("#allDateFilterWrap"),
   allDateFilter: document.querySelector("#allDateFilter"),
   gallery: document.querySelector("#gallery"),
   emptyState: document.querySelector("#emptyState"),
+  addBand: document.querySelector("#addBand"),
   addLinkForm: document.querySelector("#addLinkForm"),
   linkUrlInput: document.querySelector("#linkUrlInput"),
   linkTitleInput: document.querySelector("#linkTitleInput"),
@@ -74,27 +83,14 @@ const els = {
   confirmGroupLabel: document.querySelector("#confirmGroupLabel"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
+  folderSearchWrap: document.querySelector("#folderSearchWrap"),
   folderSearchInput: document.querySelector("#folderSearchInput"),
-  checkVersionButton: document.querySelector("#checkVersionButton"),
-  versionButtonLabel: document.querySelector("#versionButtonLabel"),
-  versionStatusPanel: document.querySelector("#versionStatusPanel"),
-  versionStatusTitle: document.querySelector("#versionStatusTitle"),
-  versionStatusDetails: document.querySelector("#versionStatusDetails"),
-  versionReleaseNotes: document.querySelector("#versionReleaseNotes"),
-  updateDialog: document.querySelector("#updateDialog"),
-  updateDialogDetails: document.querySelector("#updateDialogDetails"),
-  updateDialogNotes: document.querySelector("#updateDialogNotes"),
-  cancelUpdateButton: document.querySelector("#cancelUpdateButton"),
-  confirmUpdateButton: document.querySelector("#confirmUpdateButton"),
+  localVersion: document.querySelector("#localVersion"),
   dataFormatInput: document.querySelector("#dataFormatInput"),
   exportDataButton: document.querySelector("#exportDataButton"),
   importDataButton: document.querySelector("#importDataButton"),
   importFileInput: document.querySelector("#importFileInput"),
   saveSettingsButton: document.querySelector("#saveSettingsButton"),
-  connectionDialog: document.querySelector("#connectionDialog"),
-  apiBaseInput: document.querySelector("#apiBaseInput"),
-  useLocalApiButton: document.querySelector("#useLocalApiButton"),
-  saveApiBaseButton: document.querySelector("#saveApiBaseButton"),
   toast: document.querySelector("#toast")
 };
 
@@ -132,19 +128,27 @@ function getYouTubeId(url) {
   return null;
 }
 
-function apiUrl(path) {
-  if (!state.apiBase) return path;
-  return new URL(path, state.apiBase).toString();
-}
-
 async function api(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
-    ...options
+  const method = String(options.method || "GET").toUpperCase();
+  const headers = { "content-type": "application/json", ...(options.headers || {}) };
+  if (["POST", "PATCH", "DELETE"].includes(method)) {
+    if (!state.sessionToken) throw new Error("La sesión local todavía no está lista");
+    headers["x-linkoteca-session"] = state.sessionToken;
+  }
+  const response = await fetch(path, {
+    ...options,
+    headers
   });
   const data = await response.json();
   if (!response.ok || data.ok === false) throw new Error(data.error || "Error inesperado");
   return data;
+}
+
+async function initializeLocalSession() {
+  const response = await fetch("/api/session", { cache: "no-store" });
+  const data = await response.json();
+  if (!response.ok || !data.token) throw new Error("No se pudo iniciar la sesión local");
+  state.sessionToken = data.token;
 }
 
 function categoryName(categoryId) {
@@ -364,7 +368,7 @@ async function processQueuedSharedLinks() {
       } catch (error) {
         if (/fetch|network|failed|conectar|servidor/i.test(error.message || "")) {
           writeQueuedShares(queue);
-          openConnectionDialog(error);
+          toast(error.message);
           return;
         }
         queue.shift();
@@ -410,7 +414,8 @@ function toast(message) {
 }
 
 function filteredLinks() {
-  const term = state.search.trim().toLowerCase();
+  const hideViewControls = state.activeCategoryId === "trash" || state.activeCategoryId === "duplicates";
+  const term = hideViewControls ? "" : state.search.trim().toLowerCase();
   const duplicateUrls = state.activeCategoryId === "duplicates" ? duplicateUrlSet() : null;
   return state.db.links.filter((link) => {
     const archived = Boolean(link.archived);
@@ -435,6 +440,60 @@ function filteredLinks() {
       .toLowerCase();
     return haystack.includes(term);
   });
+}
+
+function clearLinkSelection(options = {}) {
+  state.selectedLinkIds.clear();
+  if (options.exitMode !== false) state.selectionMode = false;
+}
+
+function activateView(categoryId) {
+  clearLinkSelection();
+  state.activeCategoryId = categoryId;
+  render();
+}
+
+function pruneLinkSelection(links) {
+  const visibleIds = new Set(links.map((link) => link.id));
+  for (const linkId of state.selectedLinkIds) {
+    if (!visibleIds.has(linkId)) state.selectedLinkIds.delete(linkId);
+  }
+}
+
+function renderSelectionControls() {
+  const selectedCount = state.selectedLinkIds.size;
+  const inTrash = state.activeCategoryId === "trash";
+  const hideViewControls = inTrash || state.activeCategoryId === "duplicates";
+  const archivedLinkCount = state.db.links.filter((link) => link.archived).length;
+  els.selectLinksButton.setAttribute("aria-pressed", String(state.selectionMode));
+  els.selectLinksButton.innerHTML = state.selectionMode
+    ? `${icon("x")}Cancelar`
+    : `${icon("check")}Seleccionar`;
+  els.bulkDeleteCount.textContent = String(selectedCount);
+  els.bulkDeleteButton.hidden = selectedCount === 0;
+  els.emptyTrashButton.hidden = !inTrash;
+  els.emptyTrashButton.disabled = archivedLinkCount === 0;
+  els.searchWrap.hidden = hideViewControls;
+  els.folderSearchWrap.hidden = hideViewControls;
+  els.addBand.hidden = hideViewControls;
+  els.settingsButton.hidden = hideViewControls;
+  els.gallery.classList.toggle("selection-mode", state.selectionMode);
+}
+
+function toggleSelectionMode() {
+  if (state.selectionMode) clearLinkSelection();
+  else {
+    state.selectionMode = true;
+    state.selectedLinkIds.clear();
+  }
+  renderGallery();
+}
+
+function toggleLinkSelection(linkId) {
+  if (!state.selectionMode) return;
+  if (state.selectedLinkIds.has(linkId)) state.selectedLinkIds.delete(linkId);
+  else state.selectedLinkIds.add(linkId);
+  renderGallery();
 }
 
 function renderCategoryOptions() {
@@ -477,8 +536,7 @@ function createCategoryRow(category, counts) {
       <span class="count">${counts.get(category.id) || 0}</span>
     `;
     button.addEventListener("click", () => {
-      state.activeCategoryId = category.archived ? "trash" : category.id;
-      render();
+      activateView(category.archived ? "trash" : category.id);
     });
     const editButton = document.createElement("button");
     editButton.type = "button";
@@ -523,7 +581,7 @@ function renderCategories() {
   els.trashCount.textContent = trashCount;
   els.groupList.innerHTML = "";
   els.categoryList.innerHTML = "";
-  const folderFilter = state.folderSearch.trim().toLowerCase();
+  const folderFilter = state.activeCategoryId === "trash" ? "" : state.folderSearch.trim().toLowerCase();
   const categories = sortedCategories();
 
   const groups = sortedGroups();
@@ -599,6 +657,12 @@ function renderHeader(links) {
           ? "Papelera"
           : activeCategory?.name || "Carpeta";
   els.activeTitle.textContent = title;
+  if (state.activeCategoryId === "trash") {
+    const archivedFolders = state.db.categories.filter((category) => category.archived).length;
+    const archivedGroups = (state.db.groups || []).filter((group) => group.archived).length;
+    els.libraryStats.textContent = `${links.length} enlaces · ${archivedFolders} carpetas · ${archivedGroups} grupos en Papelera`;
+    return;
+  }
   const total = state.db.links.filter((link) => !link.archived).length;
   const folders = state.db.categories.length;
   els.libraryStats.textContent = `${links.length} visibles · ${total} enlaces · ${folders} carpetas`;
@@ -606,6 +670,8 @@ function renderHeader(links) {
 
 function renderGallery() {
   const links = filteredLinks();
+  pruneLinkSelection(links);
+  renderSelectionControls();
   renderHeader(links);
   els.gallery.innerHTML = "";
   els.emptyState.hidden = links.length > 0;
@@ -613,15 +679,22 @@ function renderGallery() {
     els.emptyState.textContent = state.allDateFilter === "blank"
       ? "Panel en blanco. Elige un periodo para ver enlaces sin carpeta."
       : "No hay enlaces sin carpeta en este periodo.";
+  } else if (state.activeCategoryId === "trash") {
+    els.emptyState.textContent = "No hay enlaces en la Papelera.";
   } else {
     els.emptyState.textContent = "No hay enlaces en esta vista.";
   }
 
   for (const link of links) {
     const article = document.createElement("article");
-    article.className = "link-card";
+    const selected = state.selectedLinkIds.has(link.id);
+    article.className = `link-card${selected ? " selected" : ""}`;
+    article.setAttribute("aria-selected", String(selected));
     article.innerHTML = `
       <div class="thumb">
+        ${state.selectionMode
+          ? `<button type="button" class="link-selection-checkbox" data-action="select" aria-label="${selected ? "Deseleccionar" : "Seleccionar"} ${escapeAttr(link.title || "enlace")}" aria-pressed="${selected}">${selected ? icon("check") : ""}</button>`
+          : ""}
         ${link.thumbnail ? `<img src="${escapeAttr(link.thumbnail)}" alt="">` : `<div class="placeholder">${escapeHtml(platformInitial(link.platform))}</div>`}
         <span class="platform">${escapeHtml(link.platform || "Web")}</span>
       </div>
@@ -645,8 +718,19 @@ function renderGallery() {
       </div>
     `;
     article.addEventListener("click", (event) => {
+      if (state.selectionMode) {
+        if (!event.target.closest('[data-action="select"]')) toggleLinkSelection(link.id);
+        return;
+      }
       if (!event.target.closest("button")) openDetailDialog(link.id);
     });
+    const selectAction = article.querySelector('[data-action="select"]');
+    if (selectAction) {
+      selectAction.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleLinkSelection(link.id);
+      });
+    }
     article.querySelector('[data-action="open"]').addEventListener("click", (event) => {
       event.stopPropagation();
       window.open(link.url, "_blank", "noopener");
@@ -784,10 +868,6 @@ async function deleteLink(linkId, options = {}) {
   const link = state.db.links.find((item) => item.id === linkId);
   if (!link) return;
   const permanent = Boolean(options.permanent);
-  const message = permanent
-    ? "¿Eliminar este enlace definitivamente?"
-    : "¿Borrar este enlace y enviarlo a Papelera?";
-  if (!window.confirm(message)) return;
   const data = await api(`/api/links/${link.id}${permanent ? "?permanent=1" : ""}`, {
     method: "DELETE"
   });
@@ -801,6 +881,47 @@ async function deleteLink(linkId, options = {}) {
   if (els.detailDialog.open) els.detailDialog.close();
   render();
   toast(permanent ? "Enlace eliminado" : "Enlace enviado a Papelera");
+}
+
+async function deleteSelectedLinks() {
+  const ids = [...state.selectedLinkIds];
+  if (ids.length === 0) return;
+  const deletingFromTrash = state.activeCategoryId === "trash";
+  els.bulkDeleteButton.disabled = true;
+  try {
+    const data = await api("/api/links", {
+      method: "DELETE",
+      body: JSON.stringify({ ids })
+    });
+    const deletedIds = new Set(data.deletedIds || []);
+    const archivedLinks = new Map((data.archivedLinks || []).map((link) => [link.id, link]));
+    state.db.links = state.db.links
+      .filter((link) => !deletedIds.has(link.id))
+      .map((link) => archivedLinks.get(link.id) || link);
+    clearLinkSelection();
+    render();
+    toast(deletingFromTrash
+      ? `${ids.length} enlace(s) eliminado(s)`
+      : `${ids.length} enlace(s) enviado(s) a Papelera`);
+  } finally {
+    els.bulkDeleteButton.disabled = false;
+  }
+}
+
+async function emptyTrash() {
+  const archivedLinkCount = state.db.links.filter((link) => link.archived).length;
+  if (archivedLinkCount === 0) return;
+  els.emptyTrashButton.disabled = true;
+  try {
+    const data = await api("/api/trash/links", { method: "DELETE" });
+    const deletedIds = new Set(data.deletedIds || []);
+    state.db.links = state.db.links.filter((link) => !deletedIds.has(link.id));
+    clearLinkSelection();
+    render();
+    toast(`${data.deleted || 0} enlace(s) eliminado(s) de Papelera`);
+  } finally {
+    els.emptyTrashButton.disabled = state.db.links.every((link) => !link.archived);
+  }
 }
 
 async function restoreLink(linkId, options = {}) {
@@ -823,35 +944,6 @@ function openDetailLink() {
 function copyDetailUrl() {
   const link = state.db.links.find((item) => item.id === state.detailLinkId);
   if (link) copyLink(link.url);
-}
-
-function openConnectionDialog(error) {
-  els.libraryStats.textContent = "No se pudo conectar con el servidor";
-  els.apiBaseInput.value = state.apiBase || "";
-  if (els.connectionDialog.open) return;
-  els.connectionDialog.showModal();
-  if (error?.message) toast(error.message);
-}
-
-async function saveApiBase() {
-  const value = els.apiBaseInput.value.trim().replace(/\/$/, "");
-  if (!/^https?:\/\//i.test(value)) {
-    toast("Escribe una URL tipo http://192.168.1.50:4387");
-    return;
-  }
-  state.apiBase = value;
-  localStorage.setItem("linkotecaApiBase", value);
-  els.connectionDialog.close();
-  await load();
-  toast("Servidor conectado");
-}
-
-async function useLocalApi() {
-  state.apiBase = "";
-  localStorage.removeItem("linkotecaApiBase");
-  els.connectionDialog.close();
-  await load();
-  toast("Usando servidor local");
 }
 
 function renderCategoryGroupOptions() {
@@ -1008,8 +1100,7 @@ async function addLink(event) {
 
 function fillSettings() {
   els.dataFormatInput.value = state.db.settings?.storage?.format || "json";
-  els.versionButtonLabel.textContent = "Verificar versión";
-  els.versionStatusPanel.hidden = true;
+  els.localVersion.textContent = state.appVersion || "1.0.3";
 }
 
 function openSettingsDialog() {
@@ -1029,54 +1120,6 @@ async function saveSettings() {
   });
   state.db.settings = data.settings;
   toast("Configuración guardada");
-}
-
-async function checkVersion() {
-  els.checkVersionButton.disabled = true;
-  els.versionButtonLabel.textContent = "Verificando...";
-  try {
-    const data = await api("/api/version");
-    els.versionButtonLabel.textContent = "Verificar versión";
-    els.versionStatusPanel.hidden = false;
-    els.versionStatusPanel.dataset.status = data.status;
-    els.versionStatusDetails.textContent = `Versión instalada: ${data.version} · Versión disponible: ${data.latest}`;
-    els.versionStatusDetails.hidden = false;
-    els.versionReleaseNotes.textContent = data.notes || "";
-    els.versionReleaseNotes.hidden = !data.notes;
-
-    if (data.status === "update_available") {
-      els.versionStatusTitle.textContent = "Hay una nueva versión disponible";
-      if (data.canAutoUpdate) {
-        els.updateDialogDetails.textContent = `Tienes la versión ${data.version}. Se instalará la versión ${data.latest} y Linkoteca se reiniciará.`;
-        els.updateDialogNotes.textContent = data.notes || "";
-        els.updateDialogNotes.hidden = !data.notes;
-        els.confirmUpdateButton.disabled = false;
-        els.cancelUpdateButton.disabled = false;
-        if (!els.updateDialog.open) els.updateDialog.showModal();
-      }
-    } else if (data.status === "local_newer") {
-      els.versionStatusTitle.textContent = "Esta instalación es más nueva que la versión publicada";
-    } else if (data.status === "current") {
-      els.versionStatusTitle.textContent = "Linkoteca está actualizada";
-      els.versionStatusDetails.textContent = "";
-      els.versionStatusDetails.hidden = true;
-      els.versionReleaseNotes.textContent = "";
-      els.versionReleaseNotes.hidden = true;
-      if (els.updateDialog.open) els.updateDialog.close("cancel");
-    } else {
-      els.versionStatusTitle.textContent = "No se pudo verificar la versión publicada";
-    }
-  } catch (error) {
-    els.versionButtonLabel.textContent = "Verificar versión";
-    els.versionStatusPanel.hidden = false;
-    els.versionStatusPanel.dataset.status = "check_failed";
-    els.versionStatusTitle.textContent = "No se pudo verificar la versión";
-    els.versionStatusDetails.textContent = error.message;
-    els.versionStatusDetails.hidden = false;
-    els.versionReleaseNotes.hidden = true;
-  } finally {
-    els.checkVersionButton.disabled = false;
-  }
 }
 
 function downloadData() {
@@ -1112,28 +1155,39 @@ function escapeAttr(value) {
 
 async function load() {
   try {
-    state.db = await api("/api/library");
+    const [database, version] = await Promise.all([api("/api/library"), api("/api/version")]);
+    state.db = database;
+    state.appVersion = version.version;
     render();
     await processQueuedSharedLinks();
   } catch (error) {
-    openConnectionDialog(error);
+    els.libraryStats.textContent = "No se pudo iniciar Linkoteca local";
     throw error;
   }
 }
 
 els.allLinksButton.addEventListener("click", () => {
-  state.activeCategoryId = "all";
-  render();
+  activateView("all");
 });
 
 els.duplicatesButton.addEventListener("click", () => {
-  state.activeCategoryId = "duplicates";
-  render();
+  activateView("duplicates");
 });
 
 els.trashButton.addEventListener("click", () => {
-  state.activeCategoryId = "trash";
-  render();
+  activateView("trash");
+});
+
+els.selectLinksButton.addEventListener("click", () => {
+  toggleSelectionMode();
+});
+
+els.bulkDeleteButton.addEventListener("click", () => {
+  deleteSelectedLinks().catch((error) => toast(error.message));
+});
+
+els.emptyTrashButton.addEventListener("click", () => {
+  emptyTrash().catch((error) => toast(error.message));
 });
 
 els.searchInput.addEventListener("input", (event) => {
@@ -1207,51 +1261,6 @@ els.saveSettingsButton.addEventListener("click", () => {
   saveSettings().catch((error) => toast(error.message));
 });
 
-els.checkVersionButton.addEventListener("click", () => {
-  checkVersion().catch((error) => toast(error.message));
-});
-
-els.confirmUpdateButton.addEventListener("click", () => {
-  installAvailableUpdate().catch((error) => {
-    els.confirmUpdateButton.disabled = false;
-    els.cancelUpdateButton.disabled = false;
-    els.versionStatusPanel.dataset.status = "check_failed";
-    els.versionStatusTitle.textContent = "No se pudo instalar la actualización";
-    els.versionStatusDetails.textContent = error.message;
-    els.versionStatusDetails.hidden = false;
-    els.updateDialogDetails.textContent = `No se pudo instalar la actualización: ${error.message}`;
-  });
-});
-
-async function installAvailableUpdate() {
-  els.confirmUpdateButton.disabled = true;
-  els.cancelUpdateButton.disabled = true;
-  els.versionStatusTitle.textContent = "Descargando actualización";
-  els.versionStatusDetails.textContent = "Progreso: 0%";
-  els.versionStatusDetails.hidden = false;
-  els.updateDialogDetails.textContent = "Descargando actualización: 0%";
-  const progressTimer = setInterval(async () => {
-    try {
-      const state = await api("/api/update/status");
-      if (state.status === "downloading") {
-        els.versionStatusDetails.textContent = `Progreso: ${Math.round(state.percent || 0)}%`;
-        els.updateDialogDetails.textContent = `Descargando actualización: ${Math.round(state.percent || 0)}%`;
-      }
-    } catch {
-      // La solicitud principal informará cualquier fallo.
-    }
-  }, 700);
-  try {
-    await api("/api/update/download", { method: "POST" });
-  } finally {
-    clearInterval(progressTimer);
-  }
-  els.versionStatusTitle.textContent = "Instalando actualización";
-  els.versionStatusDetails.textContent = "Linkoteca se cerrará y reiniciará automáticamente.";
-  els.updateDialogDetails.textContent = "Instalando actualización. Linkoteca se reiniciará automáticamente.";
-  await api("/api/update/install", { method: "POST" });
-}
-
 els.exportDataButton.addEventListener("click", () => {
   downloadData();
 });
@@ -1273,14 +1282,6 @@ els.folderSearchInput.addEventListener("input", (event) => {
   renderCategories();
 });
 
-els.saveApiBaseButton.addEventListener("click", () => {
-  saveApiBase().catch((error) => openConnectionDialog(error));
-});
-
-els.useLocalApiButton.addEventListener("click", () => {
-  useLocalApi().catch((error) => openConnectionDialog(error));
-});
-
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
@@ -1295,6 +1296,6 @@ if (window.__linkotecaPendingShare) {
   queueSharedLink(window.__linkotecaPendingShare);
 }
 
-load().catch((error) => {
+initializeLocalSession().then(load).catch((error) => {
   els.libraryStats.textContent = error.message;
 });

@@ -1,10 +1,10 @@
 {
   "name": "linkoteca",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
-  "description": "Biblioteca visual de enlaces con carpetas, vista previa y sincronizacion.",
+  "description": "Biblioteca visual de enlaces con almacenamiento local.",
   "author": "Ernesto Pernett",
   "repository": {
     "type": "git",
@@ -22,8 +22,7 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
-    "express": "^5.1.0",
-    "lucide-static": "^1.16.0"
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "electron": "^42.3.0",
@@ -36,11 +35,6 @@
     "asar": false,
     "directories": {
       "output": "dist"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "colombianitov2",
-      "repo": "Linkoteca"
     },
     "files": [
       "electron/**/*",

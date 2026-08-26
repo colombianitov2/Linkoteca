@@ -11,17 +11,21 @@ let appUrl;
 let updaterState = { status: "idle", percent: 0, version: app.getVersion(), latest: app.getVersion() };
 let lastUpdateCheck = null;
 
+if (process.platform === "win32") {
+  app.setAppUserModelId(process.env.LINKOTECA_APP_USER_MODEL_ID || "com.wolframica.linkoteca");
+}
+
 function requestOk(url) {
   return new Promise((resolve) => {
-    const req = http.get(url, (res) => {
-      res.resume();
-      resolve(res.statusCode >= 200 && res.statusCode < 500);
+    const request = http.get(url, (response) => {
+      response.resume();
+      resolve(response.statusCode >= 200 && response.statusCode < 500);
     });
-    req.setTimeout(1200, () => {
-      req.destroy();
+    request.setTimeout(1200, () => {
+      request.destroy();
       resolve(false);
     });
-    req.on("error", () => resolve(false));
+    request.on("error", () => resolve(false));
   });
 }
 
@@ -121,7 +125,6 @@ async function startOwnedServer() {
   process.env.PORT = String(port);
   process.env.LINKOTECA_NO_OPEN = "1";
   process.env.LINKOTECA_HOME = path.join(app.getPath("userData"), "workspace");
-
   const serverPath = path.join(__dirname, "..", "src", "server.js");
   const serverModule = await import(pathToFileURL(serverPath).href);
   serverModule.registerUpdateController(updateController);
@@ -136,16 +139,15 @@ async function createWindow() {
     minWidth: 980,
     minHeight: 640,
     title: "Linkoteca",
+    icon: path.join(__dirname, "..", "public", "icon.ico"),
     backgroundColor: "#fbfaf7",
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
-
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
-
-  await mainWindow.loadURL(`${appUrl}/?v=24`);
+  await mainWindow.loadURL(`${appUrl}/?v=25`);
 }
 
 app.whenReady().then(async () => {
@@ -153,6 +155,9 @@ app.whenReady().then(async () => {
   configureAutoUpdater();
   await startOwnedServer();
   await createWindow();
+}).catch((error) => {
+  console.error(error);
+  app.exit(1);
 });
 
 app.on("activate", () => {

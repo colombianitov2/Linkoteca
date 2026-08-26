@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111111">
     <title>Linkoteca</title>
+    <link rel="icon" href="/icon.png?v=28" type="image/png">
     <link rel="manifest" href="/manifest.webmanifest?v=19">
-    <link rel="stylesheet" href="/styles.css?v=19">
+    <link rel="stylesheet" href="/styles.css?v=21">
   </head>
   <body>
     <div class="app-shell">
@@ -48,7 +49,7 @@
             <span class="icon" style="--icon: url('/icons/plus.svg')"></span>
           </button>
         </div>
-        <label class="folder-search-wrap">
+        <label id="folderSearchWrap" class="folder-search-wrap">
           <span class="icon" style="--icon: url('/icons/search.svg')"></span>
           <input id="folderSearchInput" class="folder-search" type="search" placeholder="Filtrar carpetas" autocomplete="off">
         </label>
@@ -67,10 +68,22 @@
             </label>
           </div>
           <div class="toolbar">
-            <label class="search-wrap">
+            <label id="searchWrap" class="search-wrap">
               <span class="icon" style="--icon: url('/icons/search.svg')"></span>
               <input id="searchInput" class="search" type="search" placeholder="Buscar enlaces, carpetas o plataformas" autocomplete="off">
             </label>
+            <button id="selectLinksButton" class="ghost-button" type="button" aria-pressed="false">
+              <span class="icon" style="--icon: url('/icons/check.svg')"></span>
+              Seleccionar
+            </button>
+            <button id="bulkDeleteButton" class="danger-button bulk-delete-button" type="button" hidden>
+              <span class="icon" style="--icon: url('/icons/trash.svg')"></span>
+              Borrar (<span id="bulkDeleteCount">0</span>)
+            </button>
+            <button id="emptyTrashButton" class="danger-button empty-trash-button" type="button" hidden>
+              <span class="icon" style="--icon: url('/icons/trash.svg')"></span>
+              Vaciar papelera
+            </button>
             <button id="settingsButton" class="ghost-button" type="button">
               <span class="icon" style="--icon: url('/icons/settings.svg')"></span>
               Configuración
@@ -78,7 +91,7 @@
           </div>
         </header>
 
-        <section class="add-band" aria-label="Agregar enlace">
+        <section id="addBand" class="add-band" aria-label="Agregar enlace">
           <div class="add-band-title">
             <span class="icon" style="--icon: url('/icons/link.svg')"></span>
             <span>Nuevo enlace</span>
@@ -247,17 +260,7 @@
 
         <section class="settings-section">
           <h3>Versión</h3>
-          <div class="dialog-actions inline-actions">
-            <button id="checkVersionButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/refresh-cw.svg')"></span>
-              <span id="versionButtonLabel">Verificar versión</span>
-            </button>
-          </div>
-          <div id="versionStatusPanel" class="version-status-panel" role="status" aria-live="polite" hidden>
-            <strong id="versionStatusTitle"></strong>
-            <p id="versionStatusDetails"></p>
-            <p id="versionReleaseNotes" class="settings-note" hidden></p>
-          </div>
+          <p class="settings-note">Linkoteca <strong id="localVersion">1.0.3</strong> · almacenamiento local únicamente</p>
         </section>
 
         <section class="settings-section">
@@ -273,11 +276,11 @@
           </label>
           <div class="dialog-actions inline-actions">
             <button id="exportDataButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
+              <span class="icon" style="--icon: url('/icons/download.svg')"></span>
               Exportar
             </button>
             <button id="importDataButton" class="ghost-button" type="button">
-              <span class="icon" style="--icon: url('/icons/upload-cloud.svg')"></span>
+              <span class="icon" style="--icon: url('/icons/upload.svg')"></span>
               Importar
             </button>
             <input id="importFileInput" type="file" hidden>
@@ -303,51 +306,8 @@
       </form>
     </dialog>
 
-    <dialog id="updateDialog" class="dialog">
-      <form method="dialog" class="dialog-panel">
-        <h2>Hay una nueva versión disponible</h2>
-        <p id="updateDialogDetails" class="dialog-copy"></p>
-        <p id="updateDialogNotes" class="settings-note" hidden></p>
-        <div class="dialog-actions">
-          <button id="cancelUpdateButton" value="cancel" class="ghost-button" type="submit">
-            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
-            Cancelar
-          </button>
-          <button id="confirmUpdateButton" type="button">
-            <span class="icon" style="--icon: url('/icons/download-cloud.svg')"></span>
-            Actualizar
-          </button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="connectionDialog" class="dialog connection-dialog">
-      <form method="dialog" class="dialog-panel">
-        <h2>Conectar Linkoteca</h2>
-        <p class="dialog-copy">Selecciona este equipo o escribe la URL del servidor de Linkoteca.</p>
-        <label>
-          Servidor
-          <input id="apiBaseInput" type="url" placeholder="http://192.168.1.50:4387">
-        </label>
-        <div class="dialog-actions">
-          <button value="cancel" class="ghost-button" type="submit">
-            <span class="icon" style="--icon: url('/icons/x.svg')"></span>
-            Cancelar
-          </button>
-          <button id="useLocalApiButton" class="ghost-button" type="button">
-            <span class="icon" style="--icon: url('/icons/library.svg')"></span>
-            Usar este equipo
-          </button>
-          <button id="saveApiBaseButton" type="button">
-            <span class="icon" style="--icon: url('/icons/check.svg')"></span>
-            Conectar
-          </button>
-        </div>
-      </form>
-    </dialog>
-
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script src="/app.js?v=19" type="module"></script>
+    <script src="/app.js?v=27" type="module"></script>
   </body>
 </html>

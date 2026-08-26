@@ -1,91 +1,33 @@
 # Linkoteca
 
-Biblioteca visual de enlaces para Windows. La app esta pensada para ser sencilla: el usuario crea carpetas, agrega enlaces dentro de ellas y Linkoteca muestra una vista previa con miniatura, titulo y descripcion cuando el sitio la entrega.
+Linkoteca 1.0.4 es una biblioteca visual de enlaces para Windows. Todos los datos se guardan localmente en el equipo; la aplicación no incorpora sincronización en la nube ni credenciales de usuario. Las actualizaciones se consultan y descargan desde las versiones públicas de GitHub.
 
-## Estado beta
-
-- Version: `0.3.0-beta.2`.
-- Repositorio: `https://github.com/colombianitov2/linkoteca-beta`.
-- La beta nueva arranca vacia: sin enlaces, sin carpetas y sin datos personales preinstalados.
-- La organizacion es manual: cada enlace queda en la carpeta que el usuario elija.
-- El backup principal es un solo archivo `linkoteca.json`, facil de copiar, sincronizar o transferir a otro dispositivo.
-
-## Reglas de seguridad
-
-- La base de desarrollo vive en `D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\data\linkoteca.json`.
-- `data/*.json` no se sube al repositorio porque puede contener datos personales.
-- La app puede exportar o sincronizar en una carpeta elegida por el usuario.
-- La ruta `D:\Nube` esta bloqueada.
-- `D:\Nube\Fotos y videos` se considera solo referencia historica y nunca destino.
-
-## Ejecutar
+## Desarrollo
 
 ```powershell
-cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
 npm install
+npm run check
 npm start
 ```
 
-Luego abre:
+La interfaz de desarrollo queda disponible únicamente en `http://127.0.0.1:4387`.
 
-```text
-http://localhost:4387
-```
+## Datos
 
-## Funciones principales
+- Desarrollo: `data/linkoteca.json`.
+- Aplicación instalada: `<perfil de la aplicación>/workspace/data/linkoteca.json`.
+- Antes de una operación importante, crea un respaldo local de enlaces activos con `scripts/create-active-links-backup.mjs`.
+- El respaldo especial se restaura siempre dentro de una única carpeta llamada `Todos`.
 
-- Galeria visual tipo YouTube con miniatura, titulo, descripcion y carpeta.
-- Creacion manual de carpetas.
-- Grupos desplegables para organizar carpetas y reducir el espacio del panel lateral.
-- Busqueda de enlaces y carpetas.
-- Bandeja Todos para enlaces sin carpeta, filtrable por fecha de ingreso.
-- Mover enlaces entre carpetas.
-- Borrar enlaces y restaurarlos desde Papelera.
-- Borrar carpetas vacias.
-- Copiar links al portapapeles.
-- Configuracion con creditos, perfil de GitHub, actualizaciones y descarga para Windows.
-- Backup y sincronizacion con Google Drive por OAuth, Nextcloud WebDAV, servidor por IP o carpetas locales sincronizadas por OneDrive.
-- Exportacion principal en JSON y galeria estatica por carpetas cuando se quiera una copia navegable.
+Las exportaciones JSON usan una lista explícita de campos y no incluyen configuración interna ni secretos.
 
-## Ejecutables
+## Seguridad local
 
-- Windows: `npm run dist:win`
+- El servidor escucha exclusivamente en `127.0.0.1`.
+- Las mutaciones requieren un token aleatorio de la sesión local.
+- Las escrituras de la base usan archivo temporal, sincronización y reemplazo atómico.
+- Las vistas previas bloquean hosts locales, IP privadas, link-local, metadata y redirecciones hacia esos destinos.
 
-El repo incluye un workflow para construir Windows en GitHub Actions. Al crear un tag, GitHub publica un release con un único instalador:
+## Autor
 
-- `Linkoteca-Setup-<version>.exe`
-
-Ese mismo instalador permite la instalación inicial y las actualizaciones automáticas desde la app.
-
-Ver detalles en [PACKAGING.md](PACKAGING.md).
-
-## Uso desde Microsoft Edge
-
-Linkoteca puede guardarse en favoritos de Edge siempre que el favorito apunte a:
-
-```text
-http://localhost:4387
-```
-
-El servidor debe estar corriendo con `npm start` o `Abrir Linkoteca.bat`.
-
-La distribución soportada es la aplicación de escritorio para Windows.
-
-## Backup con Google Drive
-
-La beta incluye conexion OAuth con Google Drive. Para activarla:
-
-1. Crea un OAuth Client en Google Cloud para app web/local.
-2. Usa como redirect URI:
-
-```text
-http://localhost:4387/api/google/callback
-```
-
-3. En Linkoteca abre `Configuracion > Nube y sincronizacion`.
-4. Elige `Google Drive con cuenta`.
-5. Pega `Google Client ID` y `Google Client Secret`.
-6. Pulsa `Conectar Google`.
-7. Usa `Subir nube` o `Descargar nube`.
-
-El backup se guarda como `linkoteca.json` dentro de `appDataFolder`, el espacio privado de Linkoteca en Google Drive.
+Ernesto Pernett. Perfil informativo: `https://github.com/colombianitov2`.

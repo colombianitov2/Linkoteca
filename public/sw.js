@@ -1,18 +1,21 @@
-const CACHE = "linkoteca-v24";
+const CACHE = "linkoteca-v26-local";
 const ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
   "/manifest.webmanifest",
+  "/icon.png",
+  "/icon-512.png",
+  "/icon-192.png",
+  "/icon.ico",
   "/icon.svg",
   "/icons/arrow-up-right.svg",
   "/icons/badge-check.svg",
   "/icons/check.svg",
   "/icons/clock-3.svg",
-  "/icons/cloud.svg",
   "/icons/copy.svg",
-  "/icons/download-cloud.svg",
+  "/icons/download.svg",
   "/icons/external-link.svg",
   "/icons/folder-open.svg",
   "/icons/folder.svg",
@@ -29,7 +32,7 @@ const ASSETS = [
   "/icons/sparkles.svg",
   "/icons/tag.svg",
   "/icons/trash.svg",
-  "/icons/upload-cloud.svg",
+  "/icons/upload.svg",
   "/icons/windows.svg",
   "/icons/x.svg"
 ];

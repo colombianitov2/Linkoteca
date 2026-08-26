@@ -1,8 +1,8 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "channel": "stable",
-  "notes": "Linkoteca 1.0.3: evita reinstalar la misma versión y corrige el icono de Windows.",
+  "notes": "Linkoteca 1.0.4: logo final aprobado, mejoras de Papelera/Duplicados y eliminación de enlaces sin confirmación.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.3/Linkoteca-Setup-1.0.3.exe"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.4/Linkoteca-Setup-1.0.4.exe"
   }
 }

@@ -1,52 +1,26 @@
-# Empaquetado de Linkoteca
+# Empaquetado local de Linkoteca
 
-## Probar en desarrollo
+Versión publicada: `1.0.4`.
+
+## Validar
 
 ```powershell
-cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
+npm run check
+```
+
+## Ejecutar
+
+```powershell
 npm start
-```
-
-La interfaz queda en:
-
-```text
-http://localhost:4387
-```
-
-## Probar como app de escritorio
-
-```powershell
-cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
 npm run desktop
 ```
 
-Esta version usa Electron y levanta el servidor interno automaticamente.
-
-## Generar Windows
+## Generar instalador local
 
 ```powershell
-cd "D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main"
 npm run dist:win
 ```
 
-Archivos generados:
+El comando genera artefactos solo en `dist`. No publica, etiqueta ni transfiere archivos.
 
-```text
-D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\dist\Linkoteca Setup <version>.exe
-```
-
-Es el único instalador para Windows y también es utilizado por la actualización automática.
-
-## Datos del usuario
-
-En desarrollo los datos viven en:
-
-```text
-D:\Proyectos de desarrollo de Software\Linkoteca\Linkoteca_Main\data\linkoteca.json
-```
-
-En el ejecutable de escritorio, los datos se copian al perfil del usuario de la app. Eso evita escribir dentro del instalador y conserva la biblioteca aunque actualices el programa.
-
-## Seguridad de rutas
-
-La ruta `D:\Nube` y `D:\Nube\Fotos y videos` siguen bloqueadas. La app no debe escribir ahi.
+Los datos persistentes de la aplicación instalada viven en el perfil de usuario, dentro de `workspace/data`, y no deben incorporarse al instalador.

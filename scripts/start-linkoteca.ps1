@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Port = 4387
-$Url = "http://localhost:$Port"
+$Url = "http://127.0.0.1:$Port"
 $LogDir = Join-Path $ProjectRoot "logs"
 $OutLog = Join-Path $LogDir "linkoteca.out.log"
 $ErrLog = Join-Path $LogDir "linkoteca.err.log"

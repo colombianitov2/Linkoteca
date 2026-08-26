@@ -263,36 +263,9 @@ try {
     categories = @($script:CategoryList)
     links = @($links)
     settings = [ordered]@{
-      contact = [ordered]@{
-        ownerName = "Ernesto Pernett"
-        ownerTitle = "Ingeniero Mecánico"
-        supportEmail = "epernett1020@hotmail.com"
-        paypalUrl = "https://www.paypal.com/paypalme/Wolframica?locale.x=es_XC&country.x=CO"
-      }
       storage = [ordered]@{
-        path = (Join-Path $WritableRoot "exports")
         format = "json"
       }
-      sync = [ordered]@{
-        mode = "none"
-        provider = "none"
-        autoOnOpen = $true
-        remoteUrl = ""
-        webdavUrl = ""
-        folderPath = ""
-        username = ""
-        password = ""
-      }
-      updates = [ordered]@{
-        latestVersionUrl = ""
-        androidUrl = ""
-        iosUrl = ""
-        pcUrl = ""
-      }
-    }
-    safety = [ordered]@{
-      writableRoot = [string]$WritableRoot
-      blockedRoots = @("D:\Nube", "D:\Nube\Fotos y videos")
     }
   }
 
