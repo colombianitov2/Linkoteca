@@ -7,7 +7,7 @@
     <title>Linkoteca</title>
     <link rel="icon" href="/icon.png?v=28" type="image/png">
     <link rel="manifest" href="/manifest.webmanifest?v=19">
-    <link rel="stylesheet" href="/styles.css?v=21">
+    <link rel="stylesheet" href="/styles.css?v=22">
   </head>
   <body>
     <div class="app-shell">
@@ -19,6 +19,11 @@
             <small>Biblioteca visual</small>
           </span>
         </div>
+
+        <button id="sidebarToggleButton" class="sidebar-toggle" type="button" aria-expanded="true" title="Ocultar barra lateral">
+          <span class="icon" style="--icon: url('/icons/panel-left.svg')"></span>
+          <span class="sidebar-toggle-label">Ocultar panel</span>
+        </button>
 
         <div class="sidebar-actions">
           <button id="allLinksButton" class="sidebar-button active" type="button">
@@ -308,6 +313,6 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script src="/app.js?v=27" type="module"></script>
+    <script src="/app.js?v=28" type="module"></script>
   </body>
 </html>

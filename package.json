@@ -1,6 +1,6 @@
 {
   "name": "linkoteca",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -40,6 +40,8 @@
       "electron/**/*",
       "src/**/*",
       "public/**/*",
+      "!public/icon-taskbar-preview.png",
+      "!public/taskbar-current.png",
       "scripts/**/*",
       "!data/*.json",
       "package.json",

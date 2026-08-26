@@ -129,6 +129,11 @@ textarea {
   grid-template-columns: 320px minmax(0, 1fr);
   min-height: 100vh;
   max-width: 100%;
+  transition: grid-template-columns 180ms ease;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 66px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -176,6 +181,53 @@ textarea {
   color: #fff;
   background: linear-gradient(135deg, #111 0 52%, var(--rose) 52% 70%, var(--teal) 70% 100%);
   box-shadow: var(--shadow-sm);
+}
+
+.sidebar-toggle {
+  width: 100%;
+  min-height: 38px;
+  margin: -6px 0 16px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: #fff;
+}
+
+.sidebar-toggle:hover {
+  color: var(--ink);
+  background: #efede7;
+  box-shadow: none;
+}
+
+.sidebar-toggle .icon {
+  transition: transform 180ms ease;
+}
+
+.sidebar-collapsed .sidebar {
+  overflow-x: hidden;
+  padding: 18px 10px;
+}
+
+.sidebar-collapsed .brand {
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.sidebar-collapsed .brand > span:last-child,
+.sidebar-collapsed .sidebar-actions,
+.sidebar-collapsed .folder-heading,
+.sidebar-collapsed .folder-search-wrap,
+.sidebar-collapsed .group-list,
+.sidebar-collapsed .category-list,
+.sidebar-collapsed .sidebar-toggle-label {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  padding: 0;
+}
+
+.sidebar-collapsed .sidebar-toggle .icon {
+  transform: rotate(180deg);
 }
 
 .sidebar-actions {

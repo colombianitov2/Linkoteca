@@ -22,7 +22,7 @@ const publicDir = path.join(projectRoot, "public");
 const port = Number(process.env.PORT || 4387);
 const host = "127.0.0.1";
 const appUrl = `http://${host}:${port}`;
-const appVersion = "1.0.4";
+const appVersion = "1.0.5";
 const latestVersionUrl = "https://raw.githubusercontent.com/colombianitov2/Linkoteca/main/updates/latest.json";
 let updateController = null;
 

@@ -1,6 +1,6 @@
 # Linkoteca
 
-Linkoteca 1.0.4 es una biblioteca visual de enlaces para Windows. Todos los datos se guardan localmente en el equipo; la aplicación no incorpora sincronización en la nube ni credenciales de usuario. Las actualizaciones se consultan y descargan desde las versiones públicas de GitHub.
+Linkoteca 1.0.5 es una biblioteca visual de enlaces para Windows. Todos los datos se guardan localmente en el equipo; la aplicación no incorpora sincronización en la nube ni credenciales de usuario. Las actualizaciones se consultan y descargan desde las versiones públicas de GitHub.
 
 ## Desarrollo
 
@@ -17,7 +17,7 @@ La interfaz de desarrollo queda disponible únicamente en `http://127.0.0.1:4387
 - Desarrollo: `data/linkoteca.json`.
 - Aplicación instalada: `<perfil de la aplicación>/workspace/data/linkoteca.json`.
 - Antes de una operación importante, crea un respaldo local de enlaces activos con `scripts/create-active-links-backup.mjs`.
-- El respaldo especial se restaura siempre dentro de una única carpeta llamada `Todos`.
+- El respaldo especial se restaura sin carpeta para aparecer en la vista global `Todos`.
 
 Las exportaciones JSON usan una lista explícita de campos y no incluyen configuración interna ni secretos.
 

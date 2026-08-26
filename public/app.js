@@ -7,6 +7,10 @@ function loadCollapsedGroupIds() {
   }
 }
 
+function loadSidebarCollapsed() {
+  return localStorage.getItem("linkotecaSidebarCollapsed") === "1";
+}
+
 const state = {
   db: null,
   activeCategoryId: "all",
@@ -21,6 +25,7 @@ const state = {
   detailLinkId: null,
   editingCategoryId: null,
   editingGroupId: null,
+  sidebarCollapsed: loadSidebarCollapsed(),
   selectionMode: false,
   selectedLinkIds: new Set(),
   sessionToken: "",
@@ -30,6 +35,8 @@ const state = {
 const PENDING_SHARES_KEY = "linkotecaPendingShares";
 
 const els = {
+  appShell: document.querySelector(".app-shell"),
+  sidebarToggleButton: document.querySelector("#sidebarToggleButton"),
   allLinksButton: document.querySelector("#allLinksButton"),
   allCount: document.querySelector("#allCount"),
   duplicatesButton: document.querySelector("#duplicatesButton"),
@@ -453,6 +460,23 @@ function activateView(categoryId) {
   render();
 }
 
+function persistSidebarState() {
+  localStorage.setItem("linkotecaSidebarCollapsed", state.sidebarCollapsed ? "1" : "0");
+}
+
+function renderSidebarState() {
+  els.appShell.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  els.sidebarToggleButton.setAttribute("aria-expanded", String(!state.sidebarCollapsed));
+  els.sidebarToggleButton.title = state.sidebarCollapsed ? "Mostrar barra lateral" : "Ocultar barra lateral";
+  els.sidebarToggleButton.setAttribute("aria-label", state.sidebarCollapsed ? "Mostrar barra lateral" : "Ocultar barra lateral");
+}
+
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  persistSidebarState();
+  renderSidebarState();
+}
+
 function pruneLinkSelection(links) {
   const visibleIds = new Set(links.map((link) => link.id));
   for (const linkId of state.selectedLinkIds) {
@@ -766,6 +790,7 @@ function renderGallery() {
 }
 
 function render() {
+  renderSidebarState();
   renderCategoryOptions();
   renderCategories();
   renderAllDateFilter();
@@ -1176,6 +1201,10 @@ els.duplicatesButton.addEventListener("click", () => {
 
 els.trashButton.addEventListener("click", () => {
   activateView("trash");
+});
+
+els.sidebarToggleButton.addEventListener("click", () => {
+  toggleSidebar();
 });
 
 els.selectLinksButton.addEventListener("click", () => {

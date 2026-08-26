@@ -1,8 +1,8 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "channel": "stable",
-  "notes": "Linkoteca 1.0.4: logo final aprobado, mejoras de Papelera/Duplicados y eliminación de enlaces sin confirmación.",
+  "notes": "Linkoteca 1.0.5: barra lateral contraible, vista Todos corregida sin carpeta falsa y logo final aprobado.",
   "downloads": {
-    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.4/Linkoteca-Setup-1.0.4.exe"
+    "windows": "https://github.com/colombianitov2/Linkoteca/releases/download/v1.0.5/Linkoteca-Setup-1.0.5.exe"
   }
 }

@@ -1,6 +1,6 @@
 # Empaquetado local de Linkoteca
 
-Versión publicada: `1.0.4`.
+Versión publicada: `1.0.5`.
 
 ## Validar
 

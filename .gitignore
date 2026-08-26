@@ -11,3 +11,5 @@ android/app/build/
 android/local.properties
 *.log
 .env
+public/icon-taskbar-preview.png
+public/taskbar-current.png
